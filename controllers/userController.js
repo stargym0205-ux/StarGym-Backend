@@ -193,30 +193,32 @@ exports.getAllUsers = async (req, res) => {
       
       // Handle photo path
       if (userObj.photo) {
-        // If it's a default photo, keep it as is
-        if (userObj.photo === '/default-avatar.png') {
-          userObj.photo = `${process.env.BASE_URL}${userObj.photo}`;
-          return userObj;
+        // If it's already a full URL but using the old domain, replace it
+        if (userObj.photo.includes('gym-backend-mz5w.onrender.com')) {
+          userObj.photo = userObj.photo.replace(
+            'https://gym-backend-mz5w.onrender.com',
+            'https://gym-backend-hz0n.onrender.com'
+          );
         }
         
-        // If it's already a full URL, keep it as is
-        if (userObj.photo.startsWith('http')) {
-          return userObj;
+        // If it's just a path (starts with /uploads), append it to BASE_URL
+        else if (userObj.photo.startsWith('/uploads/')) {
+          userObj.photo = `https://gym-backend-hz0n.onrender.com${userObj.photo}`;
         }
         
-        // Clean the photo path
-        let photoPath = userObj.photo;
-        if (!photoPath.startsWith('/uploads/')) {
-          photoPath = `/uploads/${photoPath.split('/').pop()}`;
+        // For default avatar
+        else if (userObj.photo === '/default-avatar.png') {
+          userObj.photo = `https://gym-backend-hz0n.onrender.com${userObj.photo}`;
         }
         
-        // Add base URL
-        userObj.photo = `${process.env.BASE_URL}${photoPath}`;
-        
-        console.log('Processed photo URL:', userObj.photo); // Debug log
+        // If it's already a full URL with the correct domain, leave it as is
+        else if (!userObj.photo.startsWith('http')) {
+          // For any other case, assume it's a relative path and append to BASE_URL
+          userObj.photo = `https://gym-backend-hz0n.onrender.com/${userObj.photo.replace(/^\/+/, '')}`;
+        }
       } else {
         // Set default photo if no photo is provided
-        userObj.photo = `${process.env.BASE_URL}/default-avatar.png`;
+        userObj.photo = `https://gym-backend-hz0n.onrender.com/default-avatar.png`;
       }
       
       return userObj;

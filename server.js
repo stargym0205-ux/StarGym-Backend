@@ -37,7 +37,7 @@ app.use(cookieParser());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || 'https://starfitnesspetlad.netlify.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type', 'Authorization', 'X-Requested-With', 'Accept');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
@@ -55,6 +55,7 @@ if (!fs.existsSync(uploadsDir)){
 // Serve static files with proper headers and CORS
 app.use('/uploads', (req, res, next) => {
   const filePath = path.join(__dirname, 'public/uploads', req.path);
+  console.log('Requested image path:', filePath); // Debug log
   
   // Check if file exists
   if (fs.existsSync(filePath)) {
@@ -67,22 +68,35 @@ app.use('/uploads', (req, res, next) => {
       '.gif': 'image/gif'
     }[ext] || 'application/octet-stream';
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins for images
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    
-    console.log('Serving image:', filePath); // Debug log
-    next();
+    // Set headers
+    res.set({
+      'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Cache-Control': 'no-cache',
+      'Cross-Origin-Resource-Policy': 'cross-origin'
+    });
+
+    // Send file
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+        res.status(500).json({
+          status: 'error',
+          message: 'Error serving image'
+        });
+      }
+    });
   } else {
-    console.log('Image not found at path:', filePath); // Debug log
+    console.log('Image not found:', filePath); // Debug log
     // Serve default avatar if image not found
     const defaultAvatarPath = path.join(__dirname, 'public', 'default-avatar.png');
     if (fs.existsSync(defaultAvatarPath)) {
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.set({
+        'Content-Type': 'image/png',
+        'Access-Control-Allow-Origin': '*'
+      });
       res.sendFile(defaultAvatarPath);
     } else {
       res.status(404).json({
@@ -91,11 +105,7 @@ app.use('/uploads', (req, res, next) => {
       });
     }
   }
-}, express.static(path.join(__dirname, 'public/uploads'), {
-  setHeaders: (res, path) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  }
-}));
+});
 
 // Create receipts directory if it doesn't exist
 const receiptDir = path.join(__dirname, 'public/receipts');
