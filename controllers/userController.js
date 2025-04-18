@@ -27,6 +27,13 @@ exports.register = async (req, res) => {
     let photoPath = null;
     if (req.file) {
       try {
+        console.log('Processing photo upload for user:', req.body.name);
+        console.log('File details:', {
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size
+        });
+        
         // Upload to Cloudinary
         photoPath = await uploadToCloudinary(req.file.buffer, req.file.mimetype);
         console.log('Photo uploaded to Cloudinary:', photoPath);
@@ -34,12 +41,14 @@ exports.register = async (req, res) => {
         console.error('Error uploading to Cloudinary:', uploadError);
         return res.status(500).json({
           status: 'error',
-          message: 'Error uploading photo'
+          message: uploadError.message || 'Error uploading photo',
+          details: process.env.NODE_ENV === 'development' ? uploadError.stack : undefined
         });
       }
     } else {
       // Set default photo path
-      photoPath = 'https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/v1/default-avatar';
+      photoPath = 'https://res.cloudinary.com/dovjfipbt/image/upload/v1744948014/default-avatar';
+      console.log('Using default avatar:', photoPath);
     }
 
     // Format dates

@@ -87,6 +87,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/health', healthRoutes);
 
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Add a route for the test upload page
+app.get('/test-upload', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'test-upload.html'));
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({
