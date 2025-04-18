@@ -3,6 +3,7 @@ const APIError = require('../utils/APIError');
 const { sendEmail, createRegistrationEmail } = require('../services/emailService');
 const { getPlanAmount, getPlanDisplayName, formatIndianPrice } = require('../utils/formatters');
 const { generateReceipt } = require('../services/pdfService');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,22 +26,20 @@ exports.register = async (req, res) => {
     // Handle photo upload
     let photoPath = null;
     if (req.file) {
-      // Ensure the path starts with /uploads/
-      photoPath = `/uploads/${req.file.filename}`;
-      console.log('Photo path saved:', photoPath);
-      
-      // Verify the file exists
-      const fullPath = path.join(__dirname, '..', 'public', photoPath);
-      if (!fs.existsSync(fullPath)) {
-        console.error('Uploaded file not found at:', fullPath);
+      try {
+        // Upload to Cloudinary
+        photoPath = await uploadToCloudinary(req.file.buffer, req.file.mimetype);
+        console.log('Photo uploaded to Cloudinary:', photoPath);
+      } catch (uploadError) {
+        console.error('Error uploading to Cloudinary:', uploadError);
         return res.status(500).json({
           status: 'error',
-          message: 'Error saving photo'
+          message: 'Error uploading photo'
         });
       }
     } else {
       // Set default photo path
-      photoPath = '/default-avatar.png';
+      photoPath = 'https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/v1/default-avatar';
     }
 
     // Format dates
@@ -54,7 +53,7 @@ exports.register = async (req, res) => {
       endDate: new Date(req.body.endDate),
       paymentMethod: req.body.paymentMethod,
       paymentStatus: 'pending',
-      photo: photoPath // Add photo path to user data
+      photo: photoPath
     };
 
     // Validate plan type
@@ -191,34 +190,19 @@ exports.getAllUsers = async (req, res) => {
     const processedUsers = users.map(user => {
       const userObj = user.toObject();
       
-      // Handle photo path
-      if (userObj.photo) {
-        // If it's already a full URL but using the old domain, replace it
-        if (userObj.photo.includes('gym-backend-mz5w.onrender.com')) {
-          userObj.photo = userObj.photo.replace(
-            'https://gym-backend-mz5w.onrender.com',
-            'https://gym-backend-hz0n.onrender.com'
-          );
-        }
-        
-        // If it's just a path (starts with /uploads), append it to BASE_URL
-        else if (userObj.photo.startsWith('/uploads/')) {
-          userObj.photo = `https://gym-backend-hz0n.onrender.com${userObj.photo}`;
-        }
-        
-        // For default avatar
-        else if (userObj.photo === '/default-avatar.png') {
-          userObj.photo = `https://gym-backend-hz0n.onrender.com${userObj.photo}`;
-        }
-        
-        // If it's already a full URL with the correct domain, leave it as is
-        else if (!userObj.photo.startsWith('http')) {
-          // For any other case, assume it's a relative path and append to BASE_URL
-          userObj.photo = `https://gym-backend-hz0n.onrender.com/${userObj.photo.replace(/^\/+/, '')}`;
-        }
-      } else {
-        // Set default photo if no photo is provided
-        userObj.photo = `https://gym-backend-hz0n.onrender.com/default-avatar.png`;
+      // If photo is already a Cloudinary URL, use it as is
+      if (userObj.photo && userObj.photo.includes('cloudinary.com')) {
+        return userObj;
+      }
+      
+      // For backward compatibility with old local paths
+      if (userObj.photo && userObj.photo.startsWith('/uploads/')) {
+        userObj.photo = `${process.env.BASE_URL}${userObj.photo}`;
+      }
+      
+      // For default avatar
+      if (userObj.photo === '/default-avatar.png') {
+        userObj.photo = `${process.env.BASE_URL}${userObj.photo}`;
       }
       
       return userObj;
@@ -300,57 +284,22 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Delete user's photo if it exists
-    if (user.photo) {
+    // Delete user's photo from Cloudinary if it exists
+    if (user.photo && user.photo.includes('cloudinary.com')) {
       try {
-        // Extract filename from the photo path (in case it's a full URL or relative path)
-        const photoFilename = user.photo.split('/').pop();
-        const photoPath = path.join(__dirname, '..', 'public', 'uploads', photoFilename);
+        // Extract public_id from the Cloudinary URL
+        const urlParts = user.photo.split('/');
+        const filename = urlParts[urlParts.length - 1].split('.')[0];
+        const publicId = `gym-users/${filename}`;
         
-        console.log('Attempting to delete photo at path:', photoPath);
+        console.log('Attempting to delete photo from Cloudinary:', publicId);
         
-        if (fs.existsSync(photoPath)) {
-          fs.unlinkSync(photoPath);
-          console.log('Successfully deleted photo:', photoPath);
-        } else {
-          console.log('Photo file not found at path:', photoPath);
-        }
+        await deleteFromCloudinary(publicId);
+        console.log('Successfully deleted photo from Cloudinary');
       } catch (photoError) {
-        console.error('Error deleting photo:', photoError);
+        console.error('Error deleting photo from Cloudinary:', photoError);
         // Continue with user deletion even if photo deletion fails
       }
-    }
-
-    // Delete user's receipt if it exists
-    try {
-      const receiptDir = path.join(__dirname, '..', 'public', 'receipts');
-      console.log('Checking receipt directory:', receiptDir);
-      
-      // Get all files in the receipts directory
-      const files = fs.readdirSync(receiptDir);
-      console.log('Found receipt files:', files);
-      
-      // Find all receipts for this user
-      const userReceipts = files.filter(file => file.startsWith(`receipt-${userId}-`));
-      console.log('User receipts to delete:', userReceipts);
-      
-      // Delete each receipt file
-      userReceipts.forEach(receiptFile => {
-        const receiptPath = path.join(receiptDir, receiptFile);
-        if (fs.existsSync(receiptPath)) {
-          fs.unlinkSync(receiptPath);
-          console.log('Successfully deleted receipt:', receiptPath);
-        } else {
-          console.log('Receipt file not found at path:', receiptPath);
-        }
-      });
-      
-      if (userReceipts.length === 0) {
-        console.log('No receipt files found for user:', userId);
-      }
-    } catch (receiptError) {
-      console.error('Error deleting receipt:', receiptError);
-      // Continue with user deletion even if receipt deletion fails
     }
 
     // Delete user from database

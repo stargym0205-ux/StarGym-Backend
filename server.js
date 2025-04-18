@@ -52,61 +52,6 @@ if (!fs.existsSync(uploadsDir)){
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Serve static files with proper headers and CORS
-app.use('/uploads', (req, res, next) => {
-  const filePath = path.join(__dirname, 'public/uploads', req.path);
-  console.log('Requested image path:', filePath); // Debug log
-  
-  // Check if file exists
-  if (fs.existsSync(filePath)) {
-    // Set appropriate content type based on file extension
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif'
-    }[ext] || 'application/octet-stream';
-
-    // Set headers
-    res.set({
-      'Content-Type': contentType,
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Cache-Control': 'no-cache',
-      'Cross-Origin-Resource-Policy': 'cross-origin'
-    });
-
-    // Send file
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('Error sending file:', err);
-        res.status(500).json({
-          status: 'error',
-          message: 'Error serving image'
-        });
-      }
-    });
-  } else {
-    console.log('Image not found:', filePath); // Debug log
-    // Serve default avatar if image not found
-    const defaultAvatarPath = path.join(__dirname, 'public', 'default-avatar.png');
-    if (fs.existsSync(defaultAvatarPath)) {
-      res.set({
-        'Content-Type': 'image/png',
-        'Access-Control-Allow-Origin': '*'
-      });
-      res.sendFile(defaultAvatarPath);
-    } else {
-      res.status(404).json({
-        status: 'error',
-        message: 'Image not found'
-      });
-    }
-  }
-});
-
 // Create receipts directory if it doesn't exist
 const receiptDir = path.join(__dirname, 'public/receipts');
 if (!fs.existsSync(receiptDir)) {

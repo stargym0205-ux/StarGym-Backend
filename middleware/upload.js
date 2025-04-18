@@ -1,36 +1,44 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Create uploads directory if it doesn't exist
-const fs = require('fs');
 const uploadDir = path.join(__dirname, '../public/uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
   console.log('Created uploads directory:', uploadDir);
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    console.log('File upload destination:', uploadDir);
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Sanitize filename and ensure unique name
-    const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const finalFilename = uniqueSuffix + '-' + sanitizedFilename;
-    console.log('Generated filename:', finalFilename);
-    cb(null, finalFilename);
+// Ensure the uploads directory exists and is writable
+const ensureUploadDir = () => {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('Created uploads directory:', uploadDir);
   }
-});
+  
+  try {
+    // Test write permissions
+    const testFile = path.join(uploadDir, '.test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    console.log('Upload directory is writable');
+  } catch (error) {
+    console.error('Upload directory is not writable:', error);
+    throw new Error('Upload directory is not writable');
+  }
+};
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+// Call this before setting up storage
+ensureUploadDir();
+
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: MAX_FILE_SIZE,
-    files: 1 // Limit to 1 file per request
+    fileSize: 2 * 1024 * 1024, // 2MB limit
+    files: 1
   },
   fileFilter: function (req, file, cb) {
     console.log('Processing file upload:', {
@@ -40,7 +48,7 @@ const upload = multer({
     });
 
     // Check file size before processing
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > 2 * 1024 * 1024) {
       console.log('File size exceeds limit:', file.size);
       return cb(new Error(`File size exceeds 2MB limit. Please upload a smaller file.`));
     }
