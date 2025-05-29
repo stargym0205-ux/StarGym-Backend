@@ -17,7 +17,7 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://gym-frontend-hz0n.onrender.com', 'https://goldgym.netlify.app', 'https://starfitnesspetlad.netlify.app'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://gym-frontend-hz0n.onrender.com', 'https://goldgym.netlify.app', 'https://starfitnesspetlad.netlify.app', 'https://goldgympetlad.netlify.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
@@ -35,7 +35,7 @@ app.use(cookieParser());
 
 // Add headers for all responses
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || 'https://starfitnesspetlad.netlify.app');
+  res.header('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -66,7 +66,7 @@ app.use('/receipts', (req, res, next) => {
   if (fs.existsSync(filePath)) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgym.netlify.app');
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
