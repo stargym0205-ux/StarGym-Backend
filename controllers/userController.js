@@ -6,6 +6,8 @@ const { generateReceipt } = require('../services/pdfService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const transporter = require('../services/emailService').transporter;
 
 exports.register = async (req, res) => {
   try {
@@ -13,7 +15,7 @@ exports.register = async (req, res) => {
     console.log('Uploaded file:', req.file);
 
     // Validate required fields
-    const requiredFields = ['name', 'email', 'phone', 'dob', 'plan', 'startDate', 'endDate', 'paymentMethod'];
+    const requiredFields = ['name', 'email', 'phone', 'gender', 'plan', 'startDate', 'endDate', 'paymentMethod'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
     if (missingFields.length > 0) {
@@ -56,7 +58,7 @@ exports.register = async (req, res) => {
       name: req.body.name,
       email: req.body.email.toLowerCase(),
       phone: req.body.phone,
-      dob: new Date(req.body.dob),
+      gender: req.body.gender,
       plan: req.body.plan,
       startDate: new Date(req.body.startDate),
       endDate: new Date(req.body.endDate),
@@ -236,7 +238,7 @@ exports.updateUser = async (req, res) => {
   try {
     console.log('Update request received:', req.params.id, req.body); // Debug log
 
-    const allowedUpdates = ['name', 'email', 'phone', 'plan', 'startDate', 'endDate'];
+    const allowedUpdates = ['name', 'email', 'phone', 'gender', 'plan', 'startDate', 'endDate'];
     const updates = {};
     
     // Only include allowed fields that are present in the request
@@ -417,6 +419,16 @@ exports.notifyExpiredMember = async (req, res) => {
       });
     }
 
+    // Create renewal token
+    const renewalToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Use direct URL for frontend
+    const renewalUrl = `http://localhost:5173/renew-membership/${renewalToken}`;
+
     // Send notification email
     try {
       await sendEmail({
@@ -435,38 +447,17 @@ exports.notifyExpiredMember = async (req, res) => {
                 <p><strong>Plan:</strong> ${user.plan}</p>
                 <p><strong>Start Date:</strong> ${new Date(user.startDate).toLocaleDateString()}</p>
                 <p><strong>End Date:</strong> ${new Date(user.endDate).toLocaleDateString()}</p>
-                <p><strong>Status:</strong> <span style="color: #dc2626;">Expired</span></p>
               </div>
 
-              <div style="background-color: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #dc2626; margin-top: 0;">Important Notice</h3>
-                <p>To continue accessing our facilities and services, please renew your membership as soon as possible.</p>
-              </div>
-              
-              <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #166534; margin-top: 0;">Available Plans</h3>
-                <ul style="list-style: none; padding: 0;">
-                  <li style="margin-bottom: 10px;">• 1 Month Plan - ₹1,500</li>
-                  <li style="margin-bottom: 10px;">• 6 Months Plan - ₹5,000</li>
-                  <li style="margin-bottom: 10px;">• 1 Year Plan - ₹8,000</li>
-                </ul>
-              </div>
-              
-              <div style="text-align: center; margin: 20px 0;">
-                <a href="${process.env.BASE_URL}" 
-                   style="background-color: #4CAF50; color: white; padding: 12px 25px; 
-                          text-decoration: none; border-radius: 5px; display: inline-block;
-                          font-weight: bold;">
-                  Renew Your Membership Now
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${renewalUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                  Renew Membership
                 </a>
               </div>
-              
-              <div style="border-top: 1px solid #e5e7eb; margin-top: 20px; padding-top: 20px;">
-                <p style="font-size: 12px; color: #666; margin: 0;">
-                  Need assistance? Our support team is here to help!<br>
-                  Contact us at: <a href="mailto:support@stargym.com" style="color: #4CAF50;">support@stargym.com</a>
-                </p>
-              </div>
+
+              <p style="font-size: 14px; color: #666;">
+                This renewal link will expire in 7 days. If you have any questions, please don't hesitate to contact us.
+              </p>
             </div>
           </div>
         `
@@ -491,5 +482,461 @@ exports.notifyExpiredMember = async (req, res) => {
       message: 'Internal server error',
       error: error.message
     });
+  }
+};
+
+// Add new function to handle membership renewal
+exports.renewMembership = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { plan, paymentMethod } = req.body;
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Calculate amount based on plan
+    const amount = getPlanAmount(plan);
+
+    // Create renewal request
+    user.renewalRequests.push({
+      plan,
+      paymentMethod,
+      amount,
+      status: 'pending'
+    });
+
+    await user.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Renewal request submitted successfully',
+      data: {
+        requestId: user.renewalRequests[user.renewalRequests.length - 1]._id,
+        amount
+      }
+    });
+  } catch (error) {
+    console.error('Error in renewMembership:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Error processing renewal request'
+    });
+  }
+};
+
+// Add new function to handle renewal request approval
+exports.approveRenewalRequest = async (req, res) => {
+  try {
+    const { userId, requestId } = req.params;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    const renewalRequest = user.renewalRequests.id(requestId);
+    if (!renewalRequest) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Renewal request not found'
+      });
+    }
+
+    if (renewalRequest.status !== 'pending') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'This request has already been processed'
+      });
+    }
+
+    // Calculate new dates
+    const startDate = new Date();
+    let endDate = new Date();
+    
+    switch (renewalRequest.plan) {
+      case '1month':
+        endDate.setMonth(endDate.getMonth() + 1);
+        break;
+      case '2month':
+        endDate.setMonth(endDate.getMonth() + 2);
+        break;
+      case '3month':
+        endDate.setMonth(endDate.getMonth() + 3);
+        break;
+      case '6month':
+        endDate.setMonth(endDate.getMonth() + 6);
+        break;
+      case 'yearly':
+        endDate.setFullYear(endDate.getFullYear() + 1);
+        break;
+    }
+
+    // Update user membership
+    user.plan = renewalRequest.plan;
+    user.startDate = startDate;
+    user.endDate = endDate;
+    user.paymentMethod = renewalRequest.paymentMethod;
+    user.paymentStatus = 'confirmed';
+    user.subscriptionStatus = 'active';
+
+    // Update renewal request status
+    renewalRequest.status = 'approved';
+    renewalRequest.processedAt = new Date();
+
+    await user.save();
+
+    // Send confirmation email
+    await sendEmail({
+      email: user.email,
+      subject: 'Membership Renewal Approved - StarGym',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333; text-align: center;">Membership Renewal Approved!</h1>
+          
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+            <p>Dear ${user.name},</p>
+            <p>Your membership renewal request has been approved!</p>
+            
+            <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #333; margin-top: 0;">Your New Membership Details:</h3>
+              <p><strong>Plan:</strong> ${renewalRequest.plan}</p>
+              <p><strong>Start Date:</strong> ${startDate.toLocaleDateString()}</p>
+              <p><strong>End Date:</strong> ${endDate.toLocaleDateString()}</p>
+              <p><strong>Amount Paid:</strong> ₹${renewalRequest.amount}</p>
+            </div>
+
+            <p>Thank you for continuing your fitness journey with us!</p>
+          </div>
+        </div>
+      `
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Renewal request approved successfully'
+    });
+  } catch (error) {
+    console.error('Error in approveRenewalRequest:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Error approving renewal request'
+    });
+  }
+};
+
+// Add new function to get pending renewal requests
+exports.getPendingRenewalRequests = async (req, res) => {
+  try {
+    console.log('Fetching pending renewal requests');
+    
+    const users = await User.find({
+      'renewalRequests.status': 'pending'
+    }).select('name email phone renewalRequests');
+
+    console.log('Found users with pending renewals:', users.length);
+
+    const pendingRequests = users.reduce((acc, user) => {
+      const userRequests = user.renewalRequests
+        .filter(request => request.status === 'pending')
+        .map(request => ({
+          userId: user._id,
+          userName: user.name,
+          userEmail: user.email,
+          userPhone: user.phone,
+          requestId: request._id,
+          plan: request.plan,
+          paymentMethod: request.paymentMethod,
+          amount: request.amount,
+          requestedAt: request.requestedAt,
+          status: request.status
+        }));
+      return [...acc, ...userRequests];
+    }, []);
+
+    console.log('Formatted pending requests:', pendingRequests.length);
+
+    res.status(200).json({
+      status: 'success',
+      data: pendingRequests
+    });
+  } catch (error) {
+    console.error('Error in getPendingRenewalRequests:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching pending renewal requests'
+    });
+  }
+};
+
+exports.verifyRenewalToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Calculate days remaining
+    const today = new Date();
+    const endDate = new Date(user.endDate);
+    const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Format dates for display
+    const formattedStartDate = new Date(user.startDate).toLocaleDateString();
+    const formattedEndDate = new Date(user.endDate).toLocaleDateString();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Token is valid',
+      data: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        photo: user.photo,
+        plan: user.plan,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+        daysRemaining,
+        subscriptionStatus: user.subscriptionStatus,
+        paymentStatus: user.paymentStatus,
+        gender: user.gender,
+        currentPlan: {
+          name: user.plan,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate,
+          status: user.subscriptionStatus
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in verifyRenewalToken:', error);
+    res.status(401).json({
+      status: 'error',
+      message: 'Invalid or expired token'
+    });
+  }
+};
+
+// Add these email notification functions at the top with other imports
+const sendRenewalRequestEmail = async (user) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: 'Gym Membership Renewal Request Received',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Renewal Request Received</h2>
+          <p>Dear ${user.name},</p>
+          <p>We have received your membership renewal request. Your request is now pending admin approval.</p>
+          <p>Details of your renewal request:</p>
+          <ul>
+            <li>Plan: ${user.renewalRequests[user.renewalRequests.length - 1].plan}</li>
+            <li>Amount: ₹${user.renewalRequests[user.renewalRequests.length - 1].amount}</li>
+            <li>Payment Method: ${user.renewalRequests[user.renewalRequests.length - 1].paymentMethod}</li>
+          </ul>
+          <p>We will notify you once your request is approved.</p>
+          <p>Best regards,<br>Your Gym Team</p>
+        </div>
+      `
+    };
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Error sending renewal request email:', error);
+  }
+};
+
+const sendRenewalApprovalEmail = async (user) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: 'Gym Membership Renewal Approved',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Membership Renewal Approved!</h2>
+          <p>Dear ${user.name},</p>
+          <p>Your membership renewal request has been approved!</p>
+          <p>Your membership details:</p>
+          <ul>
+            <li>Plan: ${user.plan}</li>
+            <li>Start Date: ${new Date(user.startDate).toLocaleDateString()}</li>
+            <li>End Date: ${new Date(user.endDate).toLocaleDateString()}</li>
+          </ul>
+          <p>Thank you for continuing your fitness journey with us!</p>
+          <p>Best regards,<br>Your Gym Team</p>
+        </div>
+      `
+    };
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Error sending renewal approval email:', error);
+  }
+};
+
+// Update the requestRenewal function
+exports.requestRenewal = async (req, res) => {
+  try {
+    console.log('Received renewal request:', req.body);
+    const { userId, plan, paymentMethod, amount } = req.body;
+
+    if (!userId || !plan || !paymentMethod || !amount) {
+      console.log('Missing required fields:', { userId, plan, paymentMethod, amount });
+      return res.status(400).json({ 
+        status: 'error',
+        message: 'Missing required fields' 
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('User not found:', userId);
+      return res.status(404).json({ 
+        status: 'error',
+        message: 'User not found' 
+      });
+    }
+
+    console.log('Found user:', user.name);
+
+    // Add the renewal request
+    const renewalRequest = {
+      plan,
+      paymentMethod,
+      amount,
+      status: 'pending',
+      requestedAt: new Date()
+    };
+
+    user.renewalRequests.push(renewalRequest);
+    await user.save();
+    console.log('Saved renewal request for user:', user.name);
+
+    // Send email notification for renewal request
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Membership Renewal Request Received - StarGym',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #333; text-align: center;">Renewal Request Received</h1>
+            
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+              <p>Dear ${user.name},</p>
+              <p>We have received your membership renewal request. Your request is now pending admin approval.</p>
+              
+              <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #333; margin-top: 0;">Your Renewal Request Details:</h3>
+                <p><strong>Plan:</strong> ${plan}</p>
+                <p><strong>Amount:</strong> ₹${amount}</p>
+                <p><strong>Payment Method:</strong> ${paymentMethod}</p>
+                <p><strong>Status:</strong> Pending Approval</p>
+              </div>
+
+              <p>We will notify you once your request is approved.</p>
+              <p>Thank you for your patience!</p>
+            </div>
+          </div>
+        `
+      });
+      console.log('Sent renewal request email to:', user.email);
+    } catch (emailError) {
+      console.error('Error sending renewal request email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.status(200).json({ 
+      status: 'success',
+      message: 'Renewal request submitted successfully',
+      data: {
+        requestId: user.renewalRequests[user.renewalRequests.length - 1]._id
+      }
+    });
+  } catch (error) {
+    console.error('Error in requestRenewal:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Error processing renewal request',
+      error: error.message 
+    });
+  }
+};
+
+// Update the approveRenewal function
+exports.approveRenewal = async (req, res) => {
+  try {
+    const { userId, requestId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const renewalRequest = user.renewalRequests.id(requestId);
+    if (!renewalRequest) {
+      return res.status(404).json({ message: 'Renewal request not found' });
+    }
+
+    // Update the renewal request status
+    renewalRequest.status = 'approved';
+    renewalRequest.processedAt = new Date();
+
+    // Update user's membership details
+    user.plan = renewalRequest.plan;
+    user.startDate = new Date();
+    
+    // Calculate end date based on plan
+    const endDate = new Date();
+    switch (renewalRequest.plan) {
+      case '1month':
+        endDate.setMonth(endDate.getMonth() + 1);
+        break;
+      case '2month':
+        endDate.setMonth(endDate.getMonth() + 2);
+        break;
+      case '3month':
+        endDate.setMonth(endDate.getMonth() + 3);
+        break;
+      case '6month':
+        endDate.setMonth(endDate.getMonth() + 6);
+        break;
+      case 'yearly':
+        endDate.setFullYear(endDate.getFullYear() + 1);
+        break;
+    }
+    user.endDate = endDate;
+
+    // Update payment status
+    user.paymentStatus = 'confirmed';
+    user.subscriptionStatus = 'active';
+
+    await user.save();
+
+    // Send email notification for renewal approval
+    await sendRenewalApprovalEmail(user);
+
+    res.status(200).json({ message: 'Renewal request approved successfully' });
+  } catch (error) {
+    console.error('Error in approveRenewal:', error);
+    res.status(500).json({ message: 'Error approving renewal request' });
   }
 };

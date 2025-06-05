@@ -5,15 +5,20 @@ const { protect } = require('../middleware/auth');
 const { upload, handleUploadError } = require('../middleware/upload');
 const { uploadToCloudinary } = require('../services/cloudinaryService');
 
-// Public route
+// Public routes
 router.post('/register', upload.single('photo'), handleUploadError, userController.register);
+router.get('/verify-token/:token', userController.verifyRenewalToken);
+router.post('/renew-membership/:token', userController.renewMembership);
+router.post('/request-renewal', userController.requestRenewal);
 
 // Protected routes - require authentication
-router.use(protect); // Apply authentication middleware to all routes below
+router.use(protect);
 
 // Admin only routes
 router.get('/', userController.getAllUsers);
+router.get('/pending-renewals', userController.getPendingRenewalRequests);
 router.patch('/approve/:userId', protect, userController.approvePayment);
+router.patch('/approve-renewal/:userId/:requestId', userController.approveRenewalRequest);
 router.patch('/:id', protect, userController.updateUser);
 router.delete('/:id', protect, userController.deleteUser);
 router.post('/notify-expired/:userId', protect, userController.notifyExpiredMember);

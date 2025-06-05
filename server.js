@@ -30,7 +30,9 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Add cookie-parser middleware
+// Body parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Add headers for all responses
@@ -42,8 +44,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // Create uploads directory if it doesn't exist
@@ -82,10 +82,10 @@ app.use('/receipts', (req, res, next) => {
 // Database connection
 connectDB();
 
-// Mount routes - ensure the path is a simple string
-app.use('/api/auth', authRoutes);
+// Mount routes
 app.use('/api/users', userRoutes);
-app.use('/health', healthRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/health', healthRoutes);
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
