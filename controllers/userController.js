@@ -19,9 +19,56 @@ exports.register = async (req, res) => {
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
     if (missingFields.length > 0) {
+      console.log('Missing fields:', missingFields);
       return res.status(400).json({
         status: 'error',
-        message: `Missing required fields: ${missingFields.join(', ')}`
+        message: `Missing required fields: ${missingFields.join(', ')}`,
+        details: {
+          missingFields,
+          receivedFields: Object.keys(req.body)
+        }
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(req.body.email)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid email format'
+      });
+    }
+
+    // Validate phone format (10 digits)
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(req.body.phone)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Phone number must be 10 digits'
+      });
+    }
+
+    // Validate gender
+    if (!['Male', 'Female', 'Other'].includes(req.body.gender)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid gender. Must be Male, Female, or Other'
+      });
+    }
+
+    // Validate plan type
+    if (!['1month', '2month', '3month', '6month', 'yearly'].includes(req.body.plan)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid plan type. Must be one of: 1month, 2month, 3month, 6month, yearly'
+      });
+    }
+
+    // Validate payment method
+    if (!['cash', 'online'].includes(req.body.paymentMethod)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid payment method. Must be either cash or online'
       });
     }
 
@@ -54,34 +101,30 @@ exports.register = async (req, res) => {
     }
 
     // Format dates
+    const startDate = new Date(req.body.startDate);
+    const endDate = new Date(req.body.endDate);
+
+    // Validate dates
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid date format for start date or end date'
+      });
+    }
+
     const userData = {
       name: req.body.name,
       email: req.body.email.toLowerCase(),
       phone: req.body.phone,
       gender: req.body.gender,
       plan: req.body.plan,
-      startDate: new Date(req.body.startDate),
-      endDate: new Date(req.body.endDate),
+      originalJoinDate: startDate,
+      startDate: startDate,
+      endDate: endDate,
       paymentMethod: req.body.paymentMethod,
       paymentStatus: 'pending',
       photo: photoPath
     };
-
-    // Validate plan type
-    if (!['1month', '2month', '3month', '6month', 'yearly'].includes(userData.plan)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid plan type. Must be one of: 1month, 2month, 3month, 6month, yearly'
-      });
-    }
-
-    // Validate payment method
-    if (!['cash', 'online'].includes(userData.paymentMethod)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid payment method. Must be either cash or online'
-      });
-    }
 
     console.log('Creating user with data:', userData);
     const user = new User(userData);
@@ -109,9 +152,11 @@ exports.register = async (req, res) => {
     
     // Handle duplicate email error
     if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
         status: 'error',
-        message: 'Email already exists'
+        message: `${field} already exists`,
+        field: field
       });
     }
 
@@ -120,13 +165,15 @@ exports.register = async (req, res) => {
       const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         status: 'error',
-        message: messages.join(', ')
+        message: messages.join(', '),
+        details: error.errors
       });
     }
 
     res.status(500).json({
       status: 'error',
-      message: error.message || 'An error occurred during registration'
+      message: error.message || 'An error occurred during registration',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -426,8 +473,9 @@ exports.notifyExpiredMember = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Use direct URL for frontend
-    const renewalUrl = `http://localhost:5173/renew-membership/${renewalToken}`;
+    // Use environment variable for frontend URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const renewalUrl = `${frontendUrl}/renew-membership/${renewalToken}`;
 
     // Send notification email
     try {
@@ -485,13 +533,11 @@ exports.notifyExpiredMember = async (req, res) => {
   }
 };
 
-// Add new function to handle membership renewal
-exports.renewMembership = async (req, res) => {
+exports.verifyRenewalToken = async (req, res) => {
   try {
     const { token } = req.params;
-    const { plan, paymentMethod } = req.body;
-
-    // Verify token
+    
+    // Verify the token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
@@ -502,41 +548,38 @@ exports.renewMembership = async (req, res) => {
       });
     }
 
-    // Calculate amount based on plan
-    const amount = getPlanAmount(plan);
-
-    // Create renewal request
-    user.renewalRequests.push({
-      plan,
-      paymentMethod,
-      amount,
-      status: 'pending'
-    });
-
-    await user.save();
-
+    // Return user data without sensitive information
     res.status(200).json({
       status: 'success',
-      message: 'Renewal request submitted successfully',
-      data: {
-        requestId: user.renewalRequests[user.renewalRequests.length - 1]._id,
-        amount
+      user: {
+        name: user.name,
+        email: user.email,
+        currentPlan: user.plan,
+        endDate: user.endDate
       }
     });
   } catch (error) {
-    console.error('Error in renewMembership:', error);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid or expired token'
+      });
+    }
     res.status(500).json({
       status: 'error',
-      message: error.message || 'Error processing renewal request'
+      message: 'Error verifying token'
     });
   }
 };
 
-// Add new function to handle renewal request approval
-exports.approveRenewalRequest = async (req, res) => {
+exports.renewMembership = async (req, res) => {
   try {
-    const { userId, requestId } = req.params;
-    const user = await User.findById(userId);
+    const { token } = req.params;
+    const { plan, startDate, endDate, paymentMethod } = req.body;
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
 
     if (!user) {
       return res.status(404).json({
@@ -545,147 +588,149 @@ exports.approveRenewalRequest = async (req, res) => {
       });
     }
 
-    const renewalRequest = user.renewalRequests.id(requestId);
-    if (!renewalRequest) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Renewal request not found'
-      });
+    // Store previous plan details
+    const previousPlan = user.plan;
+    const previousAmount = getPlanAmount(user.plan);
+    const newAmount = getPlanAmount(plan);
+
+    // If this is the first renewal, set the originalJoinDate
+    if (!user.originalJoinDate) {
+      user.originalJoinDate = user.startDate;
     }
 
-    if (renewalRequest.status !== 'pending') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'This request has already been processed'
-      });
-    }
-
-    // Calculate new dates
-    const startDate = new Date();
-    let endDate = new Date();
-    
-    switch (renewalRequest.plan) {
-      case '1month':
-        endDate.setMonth(endDate.getMonth() + 1);
-        break;
-      case '2month':
-        endDate.setMonth(endDate.getMonth() + 2);
-        break;
-      case '3month':
-        endDate.setMonth(endDate.getMonth() + 3);
-        break;
-      case '6month':
-        endDate.setMonth(endDate.getMonth() + 6);
-        break;
-      case 'yearly':
-        endDate.setFullYear(endDate.getFullYear() + 1);
-        break;
-    }
-
-    // Update user membership
-    user.plan = renewalRequest.plan;
+    // Update user's membership details
+    user.plan = plan;
     user.startDate = startDate;
     user.endDate = endDate;
-    user.paymentMethod = renewalRequest.paymentMethod;
-    user.paymentStatus = 'confirmed';
-    user.subscriptionStatus = 'active';
+    user.paymentMethod = paymentMethod;
+    user.paymentStatus = 'pending';
+    user.subscriptionStatus = 'pending';
 
-    // Update renewal request status
-    renewalRequest.status = 'approved';
-    renewalRequest.processedAt = new Date();
+    // Log this renewal in the renewals array with previous plan details
+    user.renewals = user.renewals || [];
+    user.renewals.push({
+      plan,
+      startDate,
+      endDate,
+      paymentMethod,
+      renewedAt: new Date(),
+      previousPlan,
+      previousAmount,
+      newAmount
+    });
 
     await user.save();
 
     // Send confirmation email
     await sendEmail({
       email: user.email,
-      subject: 'Membership Renewal Approved - StarGym',
+      subject: 'Membership Renewal Request Received - StarGym',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #333; text-align: center;">Membership Renewal Approved!</h1>
-          
-          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
-            <p>Dear ${user.name},</p>
-            <p>Your membership renewal request has been approved!</p>
-            
-            <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="color: #333; margin-top: 0;">Your New Membership Details:</h3>
-              <p><strong>Plan:</strong> ${renewalRequest.plan}</p>
-              <p><strong>Start Date:</strong> ${startDate.toLocaleDateString()}</p>
-              <p><strong>End Date:</strong> ${endDate.toLocaleDateString()}</p>
-              <p><strong>Amount Paid:</strong> ₹${renewalRequest.amount}</p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Renewal Request - StarGym</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f8f8; padding: 20px;">
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #333; margin: 0;">Renewal Request Received! 🎉</h1>
+              <p style="color: #666; margin-top: 10px;">Your StarGym membership renewal is being processed</p>
             </div>
 
-            <p>Thank you for continuing your fitness journey with us!</p>
+            <div style="margin-bottom: 30px;">
+              <p style="color: #444; font-size: 16px;">Dear ${user.name},</p>
+              <p style="color: #444; line-height: 1.5;">Thank you for choosing to continue your fitness journey with StarGym! Your renewal request has been received and is pending approval.</p>
+            </div>
+
+            <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+              <h2 style="color: #333; margin-top: 0; font-size: 18px;">Renewal Details</h2>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Previous Plan:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">${getPlanDisplayName(previousPlan)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Previous Amount:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">₹${previousAmount.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">New Plan:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">${getPlanDisplayName(plan)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">New Amount:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">₹${newAmount.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Start Date:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">${new Date(startDate).toLocaleDateString()}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">End Date:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">${new Date(endDate).toLocaleDateString()}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Payment Method:</td>
+                  <td style="padding: 8px 0; color: #333; font-weight: bold;">${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Status:</td>
+                  <td style="padding: 8px 0; color: #ff9800; font-weight: bold;">Pending Approval</td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="background-color: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 30px;">
+              <p style="color: #f57c00; margin: 0;">⚠️ Important Note:</p>
+              <p style="color: #666; margin: 10px 0 0 0;">Your membership will be activated once the payment is confirmed by our admin team. Please ensure your payment is completed as per the selected payment method.</p>
+            </div>
+
+            <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 30px;">
+              <p style="color: #2e7d32; margin: 0;">✨ What's Next?</p>
+              <ul style="color: #666; margin: 10px 0 0 0; padding-left: 20px;">
+                <li>Complete your payment as per the selected method</li>
+                <li>Wait for admin confirmation</li>
+                <li>You'll receive another email once your renewal is approved</li>
+                <li>Continue enjoying all StarGym facilities</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
+              <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+              <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+            </div>
           </div>
-        </div>
+        </body>
+        </html>
       `
     });
 
     res.status(200).json({
       status: 'success',
-      message: 'Renewal request approved successfully'
+      message: 'Renewal request submitted successfully'
     });
   } catch (error) {
-    console.error('Error in approveRenewalRequest:', error);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid or expired token'
+      });
+    }
     res.status(500).json({
       status: 'error',
-      message: error.message || 'Error approving renewal request'
+      message: 'Error processing renewal request'
     });
   }
 };
 
-// Add new function to get pending renewal requests
-exports.getPendingRenewalRequests = async (req, res) => {
+exports.rejectRenewal = async (req, res) => {
   try {
-    console.log('Fetching pending renewal requests');
-    
-    const users = await User.find({
-      'renewalRequests.status': 'pending'
-    }).select('name email phone renewalRequests');
-
-    console.log('Found users with pending renewals:', users.length);
-
-    const pendingRequests = users.reduce((acc, user) => {
-      const userRequests = user.renewalRequests
-        .filter(request => request.status === 'pending')
-        .map(request => ({
-          userId: user._id,
-          userName: user.name,
-          userEmail: user.email,
-          userPhone: user.phone,
-          requestId: request._id,
-          plan: request.plan,
-          paymentMethod: request.paymentMethod,
-          amount: request.amount,
-          requestedAt: request.requestedAt,
-          status: request.status
-        }));
-      return [...acc, ...userRequests];
-    }, []);
-
-    console.log('Formatted pending requests:', pendingRequests.length);
-
-    res.status(200).json({
-      status: 'success',
-      data: pendingRequests
-    });
-  } catch (error) {
-    console.error('Error in getPendingRenewalRequests:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error fetching pending renewal requests'
-    });
-  }
-};
-
-exports.verifyRenewalToken = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const { userId } = req.params;
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -694,249 +739,136 @@ exports.verifyRenewalToken = async (req, res) => {
       });
     }
 
-    // Calculate days remaining
-    const today = new Date();
-    const endDate = new Date(user.endDate);
-    const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    // Update user's subscription status
+    user.subscriptionStatus = 'expired';
+    await user.save();
 
-    // Format dates for display
-    const formattedStartDate = new Date(user.startDate).toLocaleDateString();
-    const formattedEndDate = new Date(user.endDate).toLocaleDateString();
+    // Send rejection email
+    await sendEmail({
+      email: user.email,
+      subject: 'Membership Renewal Request Rejected - Gold Gym',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333; text-align: center;">Renewal Request Rejected</h1>
+          
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+            <p>Dear ${user.name},</p>
+            <p>We regret to inform you that your membership renewal request has been rejected.</p>
+            
+            <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h3>Membership Details:</h3>
+              <p><strong>Current Plan:</strong> ${user.plan}</p>
+              <p><strong>End Date:</strong> ${new Date(user.endDate).toLocaleDateString()}</p>
+            </div>
+            
+            <p style="font-size: 14px; color: #666; margin-top: 20px;">
+              If you have any questions or concerns, please contact our support team.
+            </p>
+          </div>
+        </div>
+      `
+    });
 
     res.status(200).json({
       status: 'success',
-      message: 'Token is valid',
+      message: 'Renewal request rejected successfully'
+    });
+  } catch (error) {
+    console.error('Error rejecting renewal:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error rejecting renewal request'
+    });
+  }
+};
+
+exports.addMembershipHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { 
+      type,
+      date,
+      duration,
+      amount,
+      paymentMode,
+      plan,
+      paymentStatus,
+      transactionId,
+      notes 
+    } = req.body;
+
+    // Validate required fields
+    if (!type || !date || !duration || !amount || !paymentMode || !plan) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required fields for membership history'
+      });
+    }
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Initialize membershipHistory array if it doesn't exist
+    if (!user.membershipHistory) {
+      user.membershipHistory = [];
+    }
+
+    // Add the membership history entry
+    const membershipEntry = {
+      type,
+      date: new Date(date),
+      duration,
+      amount,
+      paymentMode,
+      plan,
+      paymentStatus: paymentStatus || 'pending',
+      transactionId,
+      notes
+    };
+    user.membershipHistory.push(membershipEntry);
+
+    // Update user's current plan and dates if it's a new membership or renewal
+    if (type === 'join' || type === 'renewal') {
+      user.plan = plan;
+      user.startDate = new Date(date);
+      
+      // Calculate end date based on duration
+      const durationMonths = parseInt(duration);
+      const endDate = new Date(date);
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+      user.endDate = endDate;
+      
+      user.paymentMethod = paymentMode;
+      user.paymentStatus = paymentStatus || 'pending';
+    }
+
+    // Save the user
+    await user.save();
+
+    res.status(200).json({
+      status: 'success',
       data: {
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        photo: user.photo,
-        plan: user.plan,
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-        daysRemaining,
-        subscriptionStatus: user.subscriptionStatus,
-        paymentStatus: user.paymentStatus,
-        gender: user.gender,
+        membershipHistory: user.membershipHistory,
         currentPlan: {
-          name: user.plan,
-          startDate: formattedStartDate,
-          endDate: formattedEndDate,
-          status: user.subscriptionStatus
+          plan: user.plan,
+          startDate: user.startDate,
+          endDate: user.endDate,
+          paymentMethod: user.paymentMethod,
+          paymentStatus: user.paymentStatus
         }
       }
     });
   } catch (error) {
-    console.error('Error in verifyRenewalToken:', error);
-    res.status(401).json({
+    console.error('Error adding membership history:', error);
+    res.status(500).json({
       status: 'error',
-      message: 'Invalid or expired token'
+      message: error.message || 'Error adding membership history'
     });
-  }
-};
-
-// Add these email notification functions at the top with other imports
-const sendRenewalRequestEmail = async (user) => {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: 'Gym Membership Renewal Request Received',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Renewal Request Received</h2>
-          <p>Dear ${user.name},</p>
-          <p>We have received your membership renewal request. Your request is now pending admin approval.</p>
-          <p>Details of your renewal request:</p>
-          <ul>
-            <li>Plan: ${user.renewalRequests[user.renewalRequests.length - 1].plan}</li>
-            <li>Amount: ₹${user.renewalRequests[user.renewalRequests.length - 1].amount}</li>
-            <li>Payment Method: ${user.renewalRequests[user.renewalRequests.length - 1].paymentMethod}</li>
-          </ul>
-          <p>We will notify you once your request is approved.</p>
-          <p>Best regards,<br>Your Gym Team</p>
-        </div>
-      `
-    };
-    await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error('Error sending renewal request email:', error);
-  }
-};
-
-const sendRenewalApprovalEmail = async (user) => {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: 'Gym Membership Renewal Approved',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Membership Renewal Approved!</h2>
-          <p>Dear ${user.name},</p>
-          <p>Your membership renewal request has been approved!</p>
-          <p>Your membership details:</p>
-          <ul>
-            <li>Plan: ${user.plan}</li>
-            <li>Start Date: ${new Date(user.startDate).toLocaleDateString()}</li>
-            <li>End Date: ${new Date(user.endDate).toLocaleDateString()}</li>
-          </ul>
-          <p>Thank you for continuing your fitness journey with us!</p>
-          <p>Best regards,<br>Your Gym Team</p>
-        </div>
-      `
-    };
-    await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error('Error sending renewal approval email:', error);
-  }
-};
-
-// Update the requestRenewal function
-exports.requestRenewal = async (req, res) => {
-  try {
-    console.log('Received renewal request:', req.body);
-    const { userId, plan, paymentMethod, amount } = req.body;
-
-    if (!userId || !plan || !paymentMethod || !amount) {
-      console.log('Missing required fields:', { userId, plan, paymentMethod, amount });
-      return res.status(400).json({ 
-        status: 'error',
-        message: 'Missing required fields' 
-      });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      console.log('User not found:', userId);
-      return res.status(404).json({ 
-        status: 'error',
-        message: 'User not found' 
-      });
-    }
-
-    console.log('Found user:', user.name);
-
-    // Add the renewal request
-    const renewalRequest = {
-      plan,
-      paymentMethod,
-      amount,
-      status: 'pending',
-      requestedAt: new Date()
-    };
-
-    user.renewalRequests.push(renewalRequest);
-    await user.save();
-    console.log('Saved renewal request for user:', user.name);
-
-    // Send email notification for renewal request
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: 'Membership Renewal Request Received - StarGym',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #333; text-align: center;">Renewal Request Received</h1>
-            
-            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
-              <p>Dear ${user.name},</p>
-              <p>We have received your membership renewal request. Your request is now pending admin approval.</p>
-              
-              <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #333; margin-top: 0;">Your Renewal Request Details:</h3>
-                <p><strong>Plan:</strong> ${plan}</p>
-                <p><strong>Amount:</strong> ₹${amount}</p>
-                <p><strong>Payment Method:</strong> ${paymentMethod}</p>
-                <p><strong>Status:</strong> Pending Approval</p>
-              </div>
-
-              <p>We will notify you once your request is approved.</p>
-              <p>Thank you for your patience!</p>
-            </div>
-          </div>
-        `
-      });
-      console.log('Sent renewal request email to:', user.email);
-    } catch (emailError) {
-      console.error('Error sending renewal request email:', emailError);
-      // Don't fail the request if email fails
-    }
-
-    res.status(200).json({ 
-      status: 'success',
-      message: 'Renewal request submitted successfully',
-      data: {
-        requestId: user.renewalRequests[user.renewalRequests.length - 1]._id
-      }
-    });
-  } catch (error) {
-    console.error('Error in requestRenewal:', error);
-    res.status(500).json({ 
-      status: 'error',
-      message: 'Error processing renewal request',
-      error: error.message 
-    });
-  }
-};
-
-// Update the approveRenewal function
-exports.approveRenewal = async (req, res) => {
-  try {
-    const { userId, requestId } = req.body;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const renewalRequest = user.renewalRequests.id(requestId);
-    if (!renewalRequest) {
-      return res.status(404).json({ message: 'Renewal request not found' });
-    }
-
-    // Update the renewal request status
-    renewalRequest.status = 'approved';
-    renewalRequest.processedAt = new Date();
-
-    // Update user's membership details
-    user.plan = renewalRequest.plan;
-    user.startDate = new Date();
-    
-    // Calculate end date based on plan
-    const endDate = new Date();
-    switch (renewalRequest.plan) {
-      case '1month':
-        endDate.setMonth(endDate.getMonth() + 1);
-        break;
-      case '2month':
-        endDate.setMonth(endDate.getMonth() + 2);
-        break;
-      case '3month':
-        endDate.setMonth(endDate.getMonth() + 3);
-        break;
-      case '6month':
-        endDate.setMonth(endDate.getMonth() + 6);
-        break;
-      case 'yearly':
-        endDate.setFullYear(endDate.getFullYear() + 1);
-        break;
-    }
-    user.endDate = endDate;
-
-    // Update payment status
-    user.paymentStatus = 'confirmed';
-    user.subscriptionStatus = 'active';
-
-    await user.save();
-
-    // Send email notification for renewal approval
-    await sendRenewalApprovalEmail(user);
-
-    res.status(200).json({ message: 'Renewal request approved successfully' });
-  } catch (error) {
-    console.error('Error in approveRenewal:', error);
-    res.status(500).json({ message: 'Error approving renewal request' });
   }
 };

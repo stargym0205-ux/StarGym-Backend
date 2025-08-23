@@ -19,7 +19,8 @@ const UserSchema = new mongoose.Schema({
   },
   gender: {
     type: String,
-    enum: ['Male', 'Female', 'Other']
+    enum: ['Male', 'Female', 'Other'],
+    required: [true, 'Please provide a gender']
   },
   photo: {
     type: String,
@@ -30,9 +31,13 @@ const UserSchema = new mongoose.Schema({
     enum: ['1month', '2month', '3month', '6month', 'yearly'],
     required: [true, 'Please select a plan']
   },
+  originalJoinDate: {
+    type: Date,
+    required: [true, 'Please provide the original joining date']
+  },
   startDate: {
     type: Date,
-    required: [true, 'Please provide a start date']
+    required: [true, 'Please provide the current subscription start date']
   },
   endDate: {
     type: Date,
@@ -53,37 +58,84 @@ const UserSchema = new mongoose.Schema({
     enum: ['active', 'expired', 'pending'],
     default: 'active'
   },
-  renewalRequests: [{
-    plan: {
+  membershipHistory: [{
+    type: {
       type: String,
-      enum: ['1month', '2month', '3month', '6month', 'yearly'],
+      enum: ['join', 'renewal'],
       required: true
     },
-    paymentMethod: {
+    date: {
+      type: Date,
+      required: true
+    },
+    duration: {
       type: String,
-      enum: ['cash', 'online'],
       required: true
     },
     amount: {
       type: Number,
       required: true
     },
-    status: {
+    paymentMode: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['cash', 'online'],
+      required: true
+    },
+    plan: {
+      type: String,
+      enum: ['1month', '2month', '3month', '6month', 'yearly'],
+      required: true
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'confirmed'],
       default: 'pending'
     },
-    requestedAt: {
-      type: Date,
-      default: Date.now
-    },
-    processedAt: Date
-  }]
+    transactionId: String,
+    notes: String
+  }],
+  subscriptionHistory: [{
+    plan: { type: String, required: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    paymentMethod: { type: String, required: true },
+    paymentStatus: { type: String, required: true },
+    amount: { type: Number, required: true },
+    renewedAt: { type: Date, default: Date.now },
+    status: { type: String, enum: ['completed', 'cancelled'], default: 'completed' }
+  }],
+  renewals: [
+    {
+      plan: { type: String, required: true },
+      startDate: { type: Date, required: true },
+      endDate: { type: Date, required: true },
+      paymentMethod: { type: String, required: true },
+      renewedAt: { type: Date, default: Date.now },
+      previousPlan: { type: String, required: true },
+      previousAmount: { type: Number, required: true },
+      newAmount: { type: Number, required: true }
+    }
+  ]
 }, { timestamps: true });
 
 // Add a method to check if subscription is expired
 UserSchema.methods.isExpired = function() {
   return new Date() > new Date(this.endDate);
+};
+
+// Add a method to add subscription history entry
+UserSchema.methods.addSubscriptionHistory = function(subscriptionData) {
+  this.subscriptionHistory.push({
+    plan: this.plan,
+    startDate: this.startDate,
+    endDate: this.endDate,
+    paymentMethod: this.paymentMethod,
+    paymentStatus: this.paymentStatus,
+    amount: subscriptionData.amount,
+    renewedAt: new Date(),
+    status: 'completed'
+  });
+  return this.save();
 };
 
 module.exports = mongoose.model('User', UserSchema);
