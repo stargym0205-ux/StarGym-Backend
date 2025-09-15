@@ -496,8 +496,10 @@ exports.notifyExpiredMember = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Use environment variable for frontend URL
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Use environment variable for frontend URL; default to live site in production
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+      ? 'https://goldgympetlad.netlify.app'
+      : 'http://localhost:5173');
     const renewalUrl = `${frontendUrl}/renew-membership/${renewalToken}`;
 
     // Send notification email
