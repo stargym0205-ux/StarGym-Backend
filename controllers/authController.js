@@ -125,6 +125,29 @@ exports.approvePayment = async (req, res) => {
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
 
+    // Ensure membershipHistory exists and append confirmed entry for revenue tracking
+    if (!user.membershipHistory) {
+      user.membershipHistory = [];
+    }
+
+    const planToMonths = {
+      '1month': 1,
+      '2month': 2,
+      '3month': 3,
+      '6month': 6,
+      'yearly': 12
+    };
+
+    user.membershipHistory.push({
+      type: 'join',
+      date: new Date(),
+      duration: String(planToMonths[user.plan] || 0),
+      amount: getPlanAmount(user.plan),
+      paymentMode: user.paymentMethod,
+      plan: user.plan,
+      paymentStatus: 'confirmed'
+    });
+
     // Update user payment status
     user.paymentStatus = 'confirmed';
     await user.save();
