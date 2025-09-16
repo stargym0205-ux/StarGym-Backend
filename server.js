@@ -12,6 +12,7 @@ const authRoutes = require('./routes/authRoutes');
 const sendEmail = require('./services/emailService');
 const { checkExpiredSubscriptions } = require('./services/subscriptionService');
 const healthRoutes = require('./routes/healthRoutes');
+const whatsappRoutes = require('./routes/whatsappRoutes');
 
 const app = express();
 
@@ -86,6 +87,7 @@ connectDB();
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));

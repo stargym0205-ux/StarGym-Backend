@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { sendEmail } = require('./emailService');
+const { sendWhatsAppText } = require('./whatsappService');
 const jwt = require('jsonwebtoken');
 
 const checkExpiredSubscriptions = async () => {
@@ -46,6 +47,12 @@ const checkExpiredSubscriptions = async () => {
           </div>
         `
       });
+      try {
+        const text = `Hi ${user.name}, your Gold Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
+        await sendWhatsAppText({ phone: user.phone, message: text });
+      } catch (waError) {
+        console.error('WhatsApp expired notify error:', waError);
+      }
     }
 
     // Find users whose subscriptions are about to expire
@@ -74,6 +81,12 @@ const checkExpiredSubscriptions = async () => {
           </div>
         `
       });
+      try {
+        const text = `Hi ${user.name}, your Gold Gym membership expires in ${daysLeft} days on ${new Date(user.endDate).toLocaleDateString()}.`;
+        await sendWhatsAppText({ phone: user.phone, message: text });
+      } catch (waError) {
+        console.error('WhatsApp expiry soon error:', waError);
+      }
     }
   } catch (error) {
     console.error('Error checking subscriptions:', error);

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const transporter = require('../services/emailService').transporter;
+const { sendWhatsAppText, formatPhoneE164 } = require('../services/whatsappService');
 
 exports.register = async (req, res) => {
   try {
@@ -140,7 +141,12 @@ exports.register = async (req, res) => {
       console.log('Welcome email sent successfully');
     } catch (emailError) {
       console.error('Error sending welcome email:', emailError);
-      // Don't fail the registration if email fails
+    }
+    try {
+      const text = `Hi ${user.name}, welcome to Gold Gym! Your plan ${user.plan} starts on ${new Date(user.startDate).toLocaleDateString()} and ends on ${new Date(user.endDate).toLocaleDateString()}.`;
+      await sendWhatsAppText({ phone: user.phone, message: text });
+    } catch (waError) {
+      console.error('WhatsApp welcome message error:', waError);
     }
 
     res.status(201).json({
@@ -248,6 +254,13 @@ exports.approvePayment = async (req, res) => {
         </div>
       `
     });
+    // WhatsApp confirmation
+    try {
+      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}.`;
+      await sendWhatsAppText({ phone: user.phone, message: text });
+    } catch (waError) {
+      console.error('WhatsApp payment confirm error:', waError);
+    }
 
     res.status(200).json({
       status: 'success',
@@ -535,7 +548,12 @@ exports.notifyExpiredMember = async (req, res) => {
           </div>
         `
       });
-
+      try {
+        const text = `Hi ${user.name}, your Gold Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
+        await sendWhatsAppText({ phone: user.phone, message: text });
+      } catch (waError) {
+        console.error('WhatsApp expired notify error:', waError);
+      }
       res.status(200).json({
         status: 'success',
         message: 'Notification sent successfully'
@@ -733,6 +751,13 @@ exports.renewMembership = async (req, res) => {
         </html>
       `
     });
+    // WhatsApp renewal received
+    try {
+      const text = `Hi ${user.name}, your Gold Gym renewal request for ${getPlanDisplayName(plan)} has been received. Start: ${new Date(startDate).toLocaleDateString()}, End: ${new Date(endDate).toLocaleDateString()}.`;
+      await sendWhatsAppText({ phone: user.phone, message: text });
+    } catch (waError) {
+      console.error('WhatsApp renewal message error:', waError);
+    }
 
     res.status(200).json({
       status: 'success',
@@ -793,6 +818,13 @@ exports.rejectRenewal = async (req, res) => {
         </div>
       `
     });
+    // WhatsApp rejection notice
+    try {
+      const text = `Hi ${user.name}, your Gold Gym renewal request was rejected. Please contact support if you have questions.`;
+      await sendWhatsAppText({ phone: user.phone, message: text });
+    } catch (waError) {
+      console.error('WhatsApp renewal reject error:', waError);
+    }
 
     res.status(200).json({
       status: 'success',

@@ -3,6 +3,7 @@ const Admin = require('../models/Admin');
 const { generateReceipt } = require('../services/pdfService');
 const User = require('../models/User');
 const { sendEmail, createPaymentConfirmationEmail } = require('../services/emailService');
+const { sendWhatsAppText } = require('../services/whatsappService');
 const { getPlanAmount, getPlanDisplayName } = require('../utils/formatters');
 
 // Cache for storing failed login attempts
@@ -158,6 +159,13 @@ exports.approvePayment = async (req, res) => {
       subject: 'Payment Confirmed - StarGym Membership',
       html: createPaymentConfirmationEmail(user, receiptUrl)
     });
+    // WhatsApp confirmation
+    try {
+      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}. Receipt: ${receiptUrl}`;
+      await sendWhatsAppText({ phone: user.phone, message: text });
+    } catch (waError) {
+      console.error('WhatsApp payment confirm error:', waError);
+    }
 
     res.status(200).json({
       status: 'success',
