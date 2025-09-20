@@ -56,6 +56,15 @@ if (!fs.existsSync(uploadsDir)){
 // Database connection
 connectDB();
 
+// Test root route
+app.get('/', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Gym Management API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Mount routes
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
@@ -302,8 +311,14 @@ const scheduleSubscriptionCheck = () => {
 scheduleSubscriptionCheck();
 
 const PORT = process.env.PORT || 3000;
+console.log('Starting server...');
+console.log('Environment:', process.env.NODE_ENV);
+console.log('Port:', PORT);
+console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Server URL: http://localhost:${PORT}`);
 });
 
 // Handle unhandled rejections
