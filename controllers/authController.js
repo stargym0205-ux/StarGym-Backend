@@ -126,7 +126,7 @@ exports.approvePayment = async (req, res) => {
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
     // Use environment variable or default to hosted URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-hz0n.onrender.com';
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
     console.log('BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
     const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
 

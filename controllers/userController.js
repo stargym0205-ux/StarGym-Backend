@@ -199,7 +199,7 @@ exports.approvePayment = async (req, res) => {
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
     // Use environment variable or default to hosted URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-hz0n.onrender.com';
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
     console.log('Environment check - BASE_URL:', process.env.BASE_URL);
     console.log('Environment check - RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL);
     console.log('Final BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
@@ -208,7 +208,7 @@ exports.approvePayment = async (req, res) => {
     
     // Ensure URL is valid - if baseUrl is empty or undefined, use hardcoded URL
     const finalReceiptUrl = fullReceiptUrl.includes('http:///') ? 
-      `https://gym-backend-hz0n.onrender.com${receiptUrl}` : 
+      `https://gym-backend-mz5w.onrender.com${receiptUrl}` : 
       fullReceiptUrl;
     console.log('Final Receipt URL after validation:', finalReceiptUrl);
 
@@ -313,7 +313,8 @@ exports.approvePayment = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find();
+    // Exclude deleted users from the main list
+    const users = await User.find({ isDeleted: { $ne: true } });
     
     // Process users to ensure photo URLs are correct
     const processedUsers = users.map(user => {
@@ -431,13 +432,21 @@ exports.deleteUser = async (req, res) => {
       }
     }
 
-    // Delete user from database
-    await User.findByIdAndDelete(userId);
-    console.log('User deleted successfully from database:', userId);
+    // Soft delete: Mark user as deleted but preserve revenue data
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    user.name = `[DELETED] ${user.name}`;
+    user.email = `deleted_${Date.now()}_${user.email}`;
+    user.phone = `deleted_${Date.now()}_${user.phone}`;
+    user.photo = 'https://res.cloudinary.com/dovjfipbt/image/upload/v1/default-avatar';
+    user.subscriptionStatus = 'expired';
+    
+    await user.save();
+    console.log('User soft deleted successfully (revenue preserved):', userId);
 
     res.status(200).json({
       status: 'success',
-      message: 'User and associated files deleted successfully'
+      message: 'User deleted successfully. Revenue data preserved for accounting purposes.'
     });
   } catch (error) {
     console.error('Error in deleteUser:', error);
