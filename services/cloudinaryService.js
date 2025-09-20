@@ -57,6 +57,65 @@ const uploadToCloudinary = async (fileBuffer, fileType) => {
   }
 };
 
+const uploadPDFToCloudinary = async (pdfBuffer, fileName) => {
+  try {
+    // Validate inputs
+    if (!pdfBuffer || !fileName) {
+      console.error('Invalid inputs to uploadPDFToCloudinary:', { 
+        hasBuffer: !!pdfBuffer, 
+        fileName 
+      });
+      throw new Error('Invalid PDF data provided');
+    }
+
+    // Log file details
+    console.log('PDF details:', {
+      bufferSize: pdfBuffer.length,
+      fileName,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME
+    });
+
+    // Convert buffer to base64
+    const b64 = Buffer.from(pdfBuffer).toString('base64');
+    const dataURI = `data:application/pdf;base64,${b64}`;
+    
+    console.log('Attempting to upload PDF to Cloudinary');
+    
+    // Upload PDF to Cloudinary with specific options
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder: 'gym-receipts',
+      public_id: fileName.replace('.pdf', ''),
+      resource_type: 'raw',
+      format: 'pdf',
+      use_filename: true,
+      unique_filename: true
+    });
+    
+    console.log('PDF upload successful:', result.secure_url);
+    return result;
+  } catch (error) {
+    // Log detailed error information
+    console.error('Cloudinary PDF upload error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      http_code: error.http_code,
+      stack: error.stack
+    });
+    
+    // Check for specific error types
+    if (error.http_code === 401) {
+      throw new Error('Cloudinary authentication failed. Please check your API credentials.');
+    } else if (error.http_code === 413) {
+      throw new Error('PDF file size too large for Cloudinary upload.');
+    } else if (error.http_code === 400) {
+      throw new Error('Invalid PDF format or data for Cloudinary upload.');
+    }
+    
+    throw new Error(`Error uploading PDF to cloud storage: ${error.message}`);
+  }
+};
+
 const deleteFromCloudinary = async (publicId) => {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
@@ -67,4 +126,4 @@ const deleteFromCloudinary = async (publicId) => {
   }
 };
 
-module.exports = { uploadToCloudinary, deleteFromCloudinary }; 
+module.exports = { uploadToCloudinary, uploadPDFToCloudinary, deleteFromCloudinary }; 

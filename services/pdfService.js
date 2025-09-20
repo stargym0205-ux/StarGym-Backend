@@ -2,7 +2,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs-extra');
 const path = require('path');
 const QRCode = require('qrcode');
-const { uploadToCloudinary } = require('./cloudinaryService');
+const { uploadPDFToCloudinary } = require('./cloudinaryService');
 
 // Helper function to get plan display name
 const getPlanDisplayName = (plan) => {
@@ -278,12 +278,7 @@ const generateReceipt = async (user) => {
     const pdfBuffer = Buffer.concat(chunks);
     
     // Upload PDF to Cloudinary
-    const cloudinaryResult = await uploadToCloudinary(pdfBuffer, {
-      folder: 'gym-receipts',
-      public_id: fileName.replace('.pdf', ''),
-      resource_type: 'raw',
-      format: 'pdf'
-    });
+    const cloudinaryResult = await uploadPDFToCloudinary(pdfBuffer, fileName);
 
     console.log('Receipt uploaded to Cloudinary:', cloudinaryResult.secure_url);
     
