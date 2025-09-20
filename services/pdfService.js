@@ -277,26 +277,21 @@ const generateReceipt = async (user) => {
     // Combine chunks into a buffer
     const pdfBuffer = Buffer.concat(chunks);
     
-    // Try to upload PDF to Cloudinary, fallback to local storage if it fails
-    try {
-      const cloudinaryResult = await uploadPDFToCloudinary(pdfBuffer, fileName);
-      console.log('Receipt uploaded to Cloudinary:', cloudinaryResult.secure_url);
-      return cloudinaryResult.secure_url;
-    } catch (cloudinaryError) {
-      console.error('Cloudinary upload failed, falling back to local storage:', cloudinaryError.message);
-      
-      // Fallback: Save to local storage
-      const receiptDir = path.join(__dirname, '../public/receipts');
-      await fs.ensureDir(receiptDir);
-      const filePath = path.join(receiptDir, fileName);
-      
-      // Write PDF to local file
-      await fs.writeFile(filePath, pdfBuffer);
-      console.log('Receipt saved locally:', filePath);
-      
-      // Return local URL
-      return `/receipts/${fileName}`;
-    }
+    // Temporarily disable Cloudinary due to 401 access restrictions
+    // Use local storage until Cloudinary account is fixed
+    console.log('Using local storage for receipts (Cloudinary temporarily disabled due to access restrictions)');
+    
+    // Save to local storage
+    const receiptDir = path.join(__dirname, '../public/receipts');
+    await fs.ensureDir(receiptDir);
+    const filePath = path.join(receiptDir, fileName);
+    
+    // Write PDF to local file
+    await fs.writeFile(filePath, pdfBuffer);
+    console.log('Receipt saved locally:', filePath);
+    
+    // Return local URL
+    return `/receipts/${fileName}`;
   } catch (error) {
     console.error('Error generating receipt:', error);
     throw error;
