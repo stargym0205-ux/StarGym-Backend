@@ -198,7 +198,8 @@ exports.approvePayment = async (req, res) => {
 
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    // Use environment variable or default to hosted URL
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://your-backend-url.onrender.com';
     console.log('BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
     const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
     console.log('Full Receipt URL:', fullReceiptUrl);
