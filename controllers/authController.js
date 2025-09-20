@@ -123,12 +123,20 @@ exports.approvePayment = async (req, res) => {
       });
     }
 
-    // Generate receipt
+    // Generate receipt (returns either Cloudinary URL or local URL)
     const receiptUrl = await generateReceipt(user);
-    // Use environment variable or default to hosted URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
-    console.log('BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
-    const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
+    console.log('Generated Receipt URL:', receiptUrl);
+    
+    // If it's a Cloudinary URL (starts with https://res.cloudinary.com), use it directly
+    // If it's a local URL (starts with /receipts/), prepend the base URL
+    let fullReceiptUrl;
+    if (receiptUrl.startsWith('https://res.cloudinary.com')) {
+      fullReceiptUrl = receiptUrl;
+    } else {
+      // Local URL, need to prepend base URL
+      const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
+      fullReceiptUrl = `${baseUrl}${receiptUrl}`;
+    }
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {

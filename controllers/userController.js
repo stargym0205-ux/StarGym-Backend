@@ -196,21 +196,21 @@ exports.approvePayment = async (req, res) => {
       });
     }
 
-    // Generate receipt
+    // Generate receipt (returns either Cloudinary URL or local URL)
     const receiptUrl = await generateReceipt(user);
-    // Use environment variable or default to hosted URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
-    console.log('Environment check - BASE_URL:', process.env.BASE_URL);
-    console.log('Environment check - RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL);
-    console.log('Final BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
-    const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
-    console.log('Full Receipt URL:', fullReceiptUrl);
+    console.log('Generated Receipt URL:', receiptUrl);
     
-    // Ensure URL is valid - if baseUrl is empty or undefined, use hardcoded URL
-    const finalReceiptUrl = fullReceiptUrl.includes('http:///') ? 
-      `https://gym-backend-mz5w.onrender.com${receiptUrl}` : 
-      fullReceiptUrl;
-    console.log('Final Receipt URL after validation:', finalReceiptUrl);
+    // If it's a Cloudinary URL (starts with https://res.cloudinary.com), use it directly
+    // If it's a local URL (starts with /receipts/), prepend the base URL
+    let finalReceiptUrl;
+    if (receiptUrl.startsWith('https://res.cloudinary.com')) {
+      finalReceiptUrl = receiptUrl;
+    } else {
+      // Local URL, need to prepend base URL
+      const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
+      finalReceiptUrl = `${baseUrl}${receiptUrl}`;
+    }
+    console.log('Final Receipt URL:', finalReceiptUrl);
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
