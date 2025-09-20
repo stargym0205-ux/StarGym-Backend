@@ -53,32 +53,8 @@ if (!fs.existsSync(uploadsDir)){
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Create receipts directory for fallback storage
-const receiptDir = path.join(__dirname, 'public/receipts');
-if (!fs.existsSync(receiptDir)) {
-  fs.mkdirSync(receiptDir, { recursive: true });
-}
-
-// Serve receipt files with proper headers (fallback for local storage)
-app.use('/receipts', (req, res, next) => {
-  const filePath = path.join(__dirname, 'public/receipts', req.path);
-  
-  // Check if file exists
-  if (fs.existsSync(filePath)) {
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    next();
-  } else {
-    res.status(404).json({
-      status: 'error',
-      message: 'Receipt not found'
-    });
-  }
-}, express.static(path.join(__dirname, 'public/receipts')));
+// Receipts are now served as base64 data URLs directly in emails
+// No local file storage needed
 
 // Database connection
 connectDB();

@@ -277,21 +277,12 @@ const generateReceipt = async (user) => {
     // Combine chunks into a buffer
     const pdfBuffer = Buffer.concat(chunks);
     
-    // Temporarily disable Cloudinary due to 401 access restrictions
-    // Use local storage until Cloudinary account is fixed
-    console.log('Using local storage for receipts (Cloudinary temporarily disabled due to access restrictions)');
+    // Convert PDF buffer to base64 for direct serving (avoiding ephemeral storage issues)
+    const base64PDF = pdfBuffer.toString('base64');
+    console.log('PDF converted to base64, length:', base64PDF.length);
     
-    // Save to local storage
-    const receiptDir = path.join(__dirname, '../public/receipts');
-    await fs.ensureDir(receiptDir);
-    const filePath = path.join(receiptDir, fileName);
-    
-    // Write PDF to local file
-    await fs.writeFile(filePath, pdfBuffer);
-    console.log('Receipt saved locally:', filePath);
-    
-    // Return local URL
-    return `/receipts/${fileName}`;
+    // Return base64 data URL that can be served directly
+    return `data:application/pdf;base64,${base64PDF}`;
   } catch (error) {
     console.error('Error generating receipt:', error);
     throw error;
