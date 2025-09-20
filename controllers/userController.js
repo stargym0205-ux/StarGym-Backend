@@ -200,9 +200,17 @@ exports.approvePayment = async (req, res) => {
     const receiptUrl = await generateReceipt(user);
     // Use environment variable or default to hosted URL
     const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-hz0n.onrender.com';
-    console.log('BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
+    console.log('Environment check - BASE_URL:', process.env.BASE_URL);
+    console.log('Environment check - RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL);
+    console.log('Final BASE_URL:', baseUrl, 'Receipt URL:', receiptUrl);
     const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
     console.log('Full Receipt URL:', fullReceiptUrl);
+    
+    // Ensure URL is valid - if baseUrl is empty or undefined, use hardcoded URL
+    const finalReceiptUrl = fullReceiptUrl.includes('http:///') ? 
+      `https://gym-backend-hz0n.onrender.com${receiptUrl}` : 
+      fullReceiptUrl;
+    console.log('Final Receipt URL after validation:', finalReceiptUrl);
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
@@ -253,11 +261,11 @@ exports.approvePayment = async (req, res) => {
                 <p style="margin: 8px 0; color: #666;"><strong>Payment Status:</strong> <span style="color: #4caf50; font-weight: bold;">Confirmed</span></p>
               </div>
               
-              ${receiptUrl ? `
+              ${finalReceiptUrl ? `
               <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
                 <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
                 <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
-                <a href="${receiptUrl}" 
+                <a href="${finalReceiptUrl}" 
                    style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
@@ -292,7 +300,7 @@ exports.approvePayment = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Payment approved successfully',
-      receiptUrl
+      receiptUrl: finalReceiptUrl
     });
   } catch (error) {
     console.error('Error approving payment:', error);
