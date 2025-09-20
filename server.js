@@ -53,6 +53,15 @@ if (!fs.existsSync(uploadsDir)){
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Database connection
+connectDB();
+
+// Mount routes
+app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/health', healthRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+
 // Receipt download endpoint
 const { generateReceiptForDownload } = require('./services/pdfService');
 const User = require('./models/User');
@@ -138,15 +147,6 @@ app.get('/api/receipt/test/:userId', async (req, res) => {
     });
   }
 });
-
-// Database connection
-connectDB();
-
-// Mount routes
-app.use('/api/users', userRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/health', healthRoutes);
-app.use('/api/whatsapp', whatsappRoutes);
 
 // Receipt verification endpoint
 app.get('/verify/:receiptNumber', (req, res) => {
