@@ -198,7 +198,8 @@ exports.approvePayment = async (req, res) => {
 
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
-    const fullReceiptUrl = `${process.env.BASE_URL}${receiptUrl}`;
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
