@@ -53,8 +53,45 @@ if (!fs.existsSync(uploadsDir)){
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Receipts are now served as base64 data URLs directly in emails
-// No local file storage needed
+// Receipt download endpoint
+const { generateReceiptForDownload } = require('./services/pdfService');
+const User = require('./models/User');
+
+app.get('/api/receipt/download/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+    
+    // Generate PDF on-demand
+    const pdfBuffer = await generateReceiptForDownload(user);
+    
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="receipt-${user._id}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Send the PDF
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error serving receipt:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate receipt'
+    });
+  }
+});
 
 // Database connection
 connectDB();

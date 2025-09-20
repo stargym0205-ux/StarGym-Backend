@@ -123,12 +123,13 @@ exports.approvePayment = async (req, res) => {
       });
     }
 
-    // Generate receipt (now returns base64 data URL)
+    // Generate receipt (now returns download endpoint URL)
     const receiptUrl = await generateReceipt(user);
-    console.log('Generated Receipt URL (base64 data URL):', receiptUrl.substring(0, 50) + '...');
+    console.log('Generated Receipt URL:', receiptUrl);
     
-    // Base64 data URLs are complete and don't need base URL prepending
-    const fullReceiptUrl = receiptUrl;
+    // Prepend base URL to create full download URL
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
+    const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
