@@ -60,18 +60,26 @@ const User = require('./models/User');
 app.get('/api/receipt/download/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    console.log('Receipt download requested for user ID:', userId);
     
     // Find the user
     const user = await User.findById(userId);
+    console.log('User found:', user ? 'Yes' : 'No');
+    
     if (!user) {
+      console.log('User not found in database');
       return res.status(404).json({
         status: 'error',
-        message: 'User not found'
+        message: 'User not found',
+        userId: userId
       });
     }
     
+    console.log('Generating PDF for user:', user.name);
+    
     // Generate PDF on-demand
     const pdfBuffer = await generateReceiptForDownload(user);
+    console.log('PDF generated successfully, size:', pdfBuffer.length);
     
     // Set headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
@@ -84,11 +92,49 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     
     // Send the PDF
     res.send(pdfBuffer);
+    console.log('PDF sent successfully');
   } catch (error) {
     console.error('Error serving receipt:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to generate receipt'
+      message: 'Failed to generate receipt',
+      error: error.message
+    });
+  }
+});
+
+// Test endpoint to check if user exists
+app.get('/api/receipt/test/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log('Testing user ID:', userId);
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.json({
+        status: 'error',
+        message: 'User not found',
+        userId: userId
+      });
+    }
+    
+    res.json({
+      status: 'success',
+      message: 'User found',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        plan: user.plan,
+        subscriptionStatus: user.subscriptionStatus
+      }
+    });
+  } catch (error) {
+    console.error('Error testing user:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Database error',
+      error: error.message
     });
   }
 });
