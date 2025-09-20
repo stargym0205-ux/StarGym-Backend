@@ -95,7 +95,7 @@ const generateReceipt = async (user) => {
       .text('MEMBERSHIP RECEIPT', 0, 80, { align: 'center' });
 
     // Receipt Number and Date
-    const receiptNumber = `RCP-${user._id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const receiptNumber = `RCP-${user._id.toString().slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
     const currentDate = new Date().toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'long',
@@ -121,7 +121,7 @@ const generateReceipt = async (user) => {
       ['Member Name:', user.name],
       ['Email:', user.email],
       ['Phone:', user.phone],
-      ['Member ID:', user._id.slice(-8).toUpperCase()]
+      ['Member ID:', user._id.toString().slice(-8).toUpperCase()]
     ];
 
     let yPosition = 230;
@@ -193,7 +193,7 @@ const generateReceipt = async (user) => {
     try {
       const qrData = {
         receiptNumber,
-        memberId: user._id,
+        memberId: user._id.toString(),
         memberName: user.name,
         plan: planName,
         amount: planAmount,
