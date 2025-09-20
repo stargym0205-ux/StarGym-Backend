@@ -2,6 +2,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs-extra');
 const path = require('path');
 const QRCode = require('qrcode');
+const { uploadToCloudinary } = require('./cloudinaryService');
 
 // Helper function to get plan display name
 const getPlanDisplayName = (plan) => {
@@ -50,19 +51,14 @@ const generateReceipt = async (user) => {
       }
     });
     
-    // Ensure receipts directory exists
-    const receiptDir = path.join(__dirname, '../public/receipts');
-    await fs.ensureDir(receiptDir);
+    // Create unique filename for Cloudinary
+    const fileName = `receipt-${user._id.toString()}-${Date.now()}.pdf`;
     
-    // Create unique filename
-    const fileName = `receipt-${user._id}-${Date.now()}.pdf`;
-    const filePath = path.join(receiptDir, fileName);
+    // Create a buffer to store the PDF data
+    const chunks = [];
     
-    // Create write stream
-    const writeStream = fs.createWriteStream(filePath);
-    
-    // Pipe the PDF document to the write stream
-    doc.pipe(writeStream);
+    // Pipe the PDF document to collect chunks
+    doc.on('data', chunk => chunks.push(chunk));
 
     // Colors
     const primaryColor = '#1f2937'; // Dark gray
@@ -271,22 +267,28 @@ const generateReceipt = async (user) => {
       .text('Contact: +91 98765 43210 | Email: info@stargym.com', 0, footerY + 60, { align: 'center' })
       .text('Address: 123 Fitness Street, Petlad, Gujarat 388450', 0, footerY + 75, { align: 'center' });
 
-    // Finalize the PDF
-    doc.end();
-
-    // Wait for the write stream to finish
+    // Finalize the PDF and wait for completion
     await new Promise((resolve, reject) => {
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
+      doc.on('end', resolve);
+      doc.on('error', reject);
+      doc.end();
     });
 
-    // Verify the file was created
-    if (!fs.existsSync(filePath)) {
-      throw new Error('Failed to create receipt file');
-    }
+    // Combine chunks into a buffer
+    const pdfBuffer = Buffer.concat(chunks);
+    
+    // Upload PDF to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(pdfBuffer, {
+      folder: 'gym-receipts',
+      public_id: fileName.replace('.pdf', ''),
+      resource_type: 'raw',
+      format: 'pdf'
+    });
 
-    // Return the relative path to the PDF
-    return `/receipts/${fileName}`;
+    console.log('Receipt uploaded to Cloudinary:', cloudinaryResult.secure_url);
+    
+    // Return the Cloudinary URL
+    return cloudinaryResult.secure_url;
   } catch (error) {
     console.error('Error generating receipt:', error);
     throw error;
