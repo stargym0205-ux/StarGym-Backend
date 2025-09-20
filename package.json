@@ -28,6 +28,7 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.0",
     "pdfkit": "^0.16.0",
+    "qrcode": "^1.5.4",
     "validator": "^13.15.0"
   },
   "devDependencies": {

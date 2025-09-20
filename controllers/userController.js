@@ -232,24 +232,47 @@ exports.approvePayment = async (req, res) => {
       email: user.email,
       subject: 'Payment Confirmed - StarGym Membership',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #333; text-align: center;">Payment Confirmed!</h1>
-          
-          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
-            <p>Dear ${user.name},</p>
-            <p>Your payment has been confirmed for your ${user.plan} membership plan.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f8f8; padding: 20px;">
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #333; text-align: center; margin: 0;">Payment Confirmed! 🎉</h1>
+            <p style="color: #666; text-align: center; margin: 10px 0 30px 0;">Your StarGym membership is now active</p>
             
-            <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <h3>Membership Details:</h3>
-              <p><strong>Plan:</strong> ${user.plan}</p>
-              <p><strong>Start Date:</strong> ${new Date(user.startDate).toLocaleDateString()}</p>
-              <p><strong>End Date:</strong> ${new Date(user.endDate).toLocaleDateString()}</p>
-              <p><strong>Payment Status:</strong> Confirmed</p>
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <p style="color: #444; font-size: 16px; margin: 0 0 15px 0;">Dear ${user.name},</p>
+              <p style="color: #444; line-height: 1.5; margin: 0 0 20px 0;">Your payment has been confirmed for your ${user.plan} membership plan.</p>
+              
+              <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #333; margin: 0 0 15px 0;">Membership Details:</h3>
+                <p style="margin: 8px 0; color: #666;"><strong>Plan:</strong> ${user.plan}</p>
+                <p style="margin: 8px 0; color: #666;"><strong>Start Date:</strong> ${new Date(user.startDate).toLocaleDateString()}</p>
+                <p style="margin: 8px 0; color: #666;"><strong>End Date:</strong> ${new Date(user.endDate).toLocaleDateString()}</p>
+                <p style="margin: 8px 0; color: #666;"><strong>Payment Status:</strong> <span style="color: #4caf50; font-weight: bold;">Confirmed</span></p>
+              </div>
+              
+              ${receiptUrl ? `
+              <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
+                <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
+                <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
+                <a href="${receiptUrl}" 
+                   style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
+                   onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
+                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
+                  📥 Download Receipt
+                </a>
+                <p style="color: #999; margin: 15px 0 0 0; font-size: 12px;">Keep this receipt safe for your records</p>
+              </div>
+              ` : ''}
+              
+              <p style="font-size: 14px; color: #666; margin-top: 20px; text-align: center;">
+                Thank you for your payment. Your membership is now active.
+              </p>
             </div>
             
-            <p style="font-size: 14px; color: #666; margin-top: 20px;">
-              Thank you for your payment. Your membership is now active.
-            </p>
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
+              <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+              <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+            </div>
           </div>
         </div>
       `
@@ -661,6 +684,9 @@ exports.renewMembership = async (req, res) => {
       previousAmount,
       newAmount
     });
+
+    // Increment renewal count
+    user.renewalCount = (user.renewalCount || 0) + 1;
 
     await user.save();
 

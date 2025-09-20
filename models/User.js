@@ -115,7 +115,11 @@ const UserSchema = new mongoose.Schema({
       previousAmount: { type: Number, required: true },
       newAmount: { type: Number, required: true }
     }
-  ]
+  ],
+  renewalCount: {
+    type: Number,
+    default: 0
+  }
 }, { timestamps: true });
 
 // Add a method to check if subscription is expired

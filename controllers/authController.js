@@ -125,6 +125,7 @@ exports.approvePayment = async (req, res) => {
 
     // Generate receipt
     const receiptUrl = await generateReceipt(user);
+    const fullReceiptUrl = `${process.env.BASE_URL}${receiptUrl}`;
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
@@ -157,11 +158,11 @@ exports.approvePayment = async (req, res) => {
     await sendEmail({
       email: user.email,
       subject: 'Payment Confirmed - StarGym Membership',
-      html: createPaymentConfirmationEmail(user, receiptUrl)
+      html: createPaymentConfirmationEmail(user, fullReceiptUrl)
     });
     // WhatsApp confirmation
     try {
-      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}. Receipt: ${receiptUrl}`;
+      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}. Receipt: ${fullReceiptUrl}`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp payment confirm error:', waError);

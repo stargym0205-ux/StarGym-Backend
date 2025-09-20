@@ -89,6 +89,107 @@ app.use('/api/auth', authRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 
+// Receipt verification endpoint
+app.get('/verify/:receiptNumber', (req, res) => {
+  const { receiptNumber } = req.params;
+  
+  // Simple verification page
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Receipt Verification - StarGym</title>
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          margin: 0;
+          padding: 20px;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .verification-card {
+          background: white;
+          border-radius: 15px;
+          padding: 40px;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+          text-align: center;
+          max-width: 500px;
+          width: 100%;
+        }
+        .logo {
+          font-size: 2.5rem;
+          font-weight: bold;
+          color: #1f2937;
+          margin-bottom: 10px;
+        }
+        .tagline {
+          color: #6b7280;
+          margin-bottom: 30px;
+        }
+        .status {
+          background: #10b981;
+          color: white;
+          padding: 15px 30px;
+          border-radius: 50px;
+          font-size: 1.2rem;
+          font-weight: bold;
+          margin: 20px 0;
+          display: inline-block;
+        }
+        .receipt-info {
+          background: #f3f4f6;
+          padding: 20px;
+          border-radius: 10px;
+          margin: 20px 0;
+        }
+        .receipt-number {
+          font-family: 'Courier New', monospace;
+          font-size: 1.1rem;
+          color: #1f2937;
+          font-weight: bold;
+        }
+        .footer {
+          margin-top: 30px;
+          color: #6b7280;
+          font-size: 0.9rem;
+        }
+        .icon {
+          font-size: 3rem;
+          margin-bottom: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="verification-card">
+        <div class="logo">STARGYM</div>
+        <div class="tagline">Fitness & Wellness Center</div>
+        
+        <div class="icon">✅</div>
+        
+        <div class="status">RECEIPT VERIFIED</div>
+        
+        <div class="receipt-info">
+          <div class="receipt-number">Receipt Number: ${receiptNumber}</div>
+          <p>This receipt has been successfully verified and is valid.</p>
+        </div>
+        
+        <div class="footer">
+          <p>Thank you for choosing StarGym!</p>
+          <p>For any queries, contact us at info@stargym.com</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  res.send(html);
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
