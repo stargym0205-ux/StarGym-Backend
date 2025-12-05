@@ -8,6 +8,7 @@ const userRoutes = require('./routes/userRoutes');
 const errorHandler = require('./middleware/error');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const authRoutes = require('./routes/authRoutes');
 const sendEmail = require('./services/emailService');
 const { checkExpiredSubscriptions } = require('./services/subscriptionService');
@@ -47,10 +48,18 @@ app.use((req, res, next) => {
 
 app.use(morgan('dev'));
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'public/uploads');
-if (!fs.existsSync(uploadsDir)){
+// Create a writable uploads directory (use /tmp on serverless)
+const uploadsDir =
+  process.env.UPLOAD_DIR || path.join(os.tmpdir(), 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn(
+    'Uploads directory not writable; proceeding with memory storage only:',
+    error.message
+  );
 }
 
 // Database connection

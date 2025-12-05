@@ -1,34 +1,32 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '../public/uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log('Created uploads directory:', uploadDir);
-}
+// Pick a writable directory (serverless platforms only allow /tmp)
+const uploadDir =
+  process.env.UPLOAD_DIR || path.join(os.tmpdir(), 'uploads');
 
-// Ensure the uploads directory exists and is writable
+// Lazily create the directory when needed; ignore failures on read-only FS
 const ensureUploadDir = () => {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log('Created uploads directory:', uploadDir);
-  }
-  
   try {
-    // Test write permissions
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      console.log('Created uploads directory:', uploadDir);
+    }
+
+    // Quick write test to surface permissions issues early
     const testFile = path.join(uploadDir, '.test');
     fs.writeFileSync(testFile, 'test');
     fs.unlinkSync(testFile);
-    console.log('Upload directory is writable');
   } catch (error) {
-    console.error('Upload directory is not writable:', error);
-    throw new Error('Upload directory is not writable');
+    console.warn(
+      'Uploads directory not writable; continuing with memory storage only:',
+      error.message
+    );
   }
 };
 
-// Call this before setting up storage
 ensureUploadDir();
 
 // Configure multer for memory storage
