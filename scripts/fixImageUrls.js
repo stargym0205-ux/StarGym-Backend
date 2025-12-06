@@ -17,9 +17,10 @@ const updateImageUrls = async () => {
     const oldDomains = [
       'gym-backend-mz5w.onrender.com',
       'gym-backend-hz0n.onrender.com',
-      'gym-backend-kohl.vercel.app'
+      'gym-backend-kohl.vercel.app',
+      'gym-backend-ochre-three.vercel.app'
     ];
-    const newDomain = 'gym-backend-ochre-three.vercel.app';
+    const newDomain = 'star-gym-backend.vercel.app';
     
     for (const user of users) {
       if (user.photo) {

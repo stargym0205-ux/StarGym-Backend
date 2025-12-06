@@ -202,7 +202,7 @@ exports.approvePayment = async (req, res) => {
     
     // Prepend base URL to create full download URL
     // Use Vercel URL for email OTP and receipt links
-    const emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.VERCEL_URL || 'https://gym-backend-ochre-three.vercel.app';
+    const emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.VERCEL_URL || 'https://star-gym-backend.vercel.app';
     const finalReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
     console.log('Final Receipt URL:', finalReceiptUrl);
 
