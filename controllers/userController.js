@@ -201,8 +201,25 @@ exports.approvePayment = async (req, res) => {
     console.log('Generated Receipt URL:', receiptUrl);
     
     // Prepend base URL to create full download URL
-    // Use Vercel URL for email OTP and receipt links
-    const emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.VERCEL_URL || 'https://star-gym-backend.vercel.app';
+    // Use environment variable for backend URL, with proper fallback
+    // Ensure we always use the full backend API URL for email links
+    let emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.BACKEND_URL;
+    
+    // If VERCEL_URL is set, ensure it has https:// protocol
+    if (!emailBaseUrl && process.env.VERCEL_URL) {
+      emailBaseUrl = process.env.VERCEL_URL.startsWith('http') 
+        ? process.env.VERCEL_URL 
+        : `https://${process.env.VERCEL_URL}`;
+    }
+    
+    // Final fallback to production backend URL
+    if (!emailBaseUrl) {
+      emailBaseUrl = 'https://star-gym-backend.vercel.app';
+    }
+    
+    // Ensure the URL doesn't end with a slash
+    emailBaseUrl = emailBaseUrl.replace(/\/$/, '');
+    
     const finalReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
     console.log('Final Receipt URL:', finalReceiptUrl);
 

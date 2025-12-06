@@ -133,11 +133,43 @@ app.get('/api/receipt/health', (req, res) => {
   });
 });
 
+// Handle OPTIONS preflight for receipt download
+app.options('/api/receipt/download/:userId', (req, res) => {
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://stargympetlad.netlify.app',
+    'https://stargym.netlify.app',
+    'https://starfitnesspetlad.netlify.app'
+  ];
+  const origin = req.headers.origin;
+  let allowedOrigin = '*';
+  if (origin && allowedOrigins.includes(origin)) {
+    allowedOrigin = origin;
+  } else if (origin && process.env.NODE_ENV === 'development') {
+    allowedOrigin = origin;
+  } else if (!origin) {
+    const protocol = req.protocol || 'https';
+    const host = req.get('host') || req.headers.host;
+    if (host) {
+      allowedOrigin = `${protocol}://${host}`;
+    }
+  }
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (allowedOrigin !== '*') {
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  res.status(204).send();
+});
+
 app.get('/api/receipt/download/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     console.log('Receipt download requested for user ID:', userId);
-    console.log('Request origin:', req.headers.origin);
+    console.log('Request origin:', req.headers.origin || 'Direct access (no origin - likely from email)');
+    console.log('Request referer:', req.headers.referer || 'No referer');
     
     // Find the user
     const user = await User.findById(userId);
@@ -170,6 +202,7 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     console.log('PDF generated successfully, size:', pdfBuffer.length, 'bytes');
     
     // Determine allowed origin - support both localhost and production
+    // If no origin (direct access from email), use the request host
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
@@ -178,21 +211,45 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
       'https://starfitnesspetlad.netlify.app'
     ];
     const origin = req.headers.origin;
-    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    
+    // For direct access (no origin - from email links), construct origin from request
+    let allowedOrigin = '*'; // Default to allow all for direct downloads
+    if (origin && allowedOrigins.includes(origin)) {
+      allowedOrigin = origin;
+    } else if (origin && process.env.NODE_ENV === 'development') {
+      // In development, allow any origin
+      allowedOrigin = origin;
+    } else if (!origin) {
+      // Direct access from email - construct origin from request
+      const protocol = req.protocol || 'https';
+      const host = req.get('host') || req.headers.host;
+      if (host) {
+        allowedOrigin = `${protocol}://${host}`;
+      }
+    }
     
     // Set headers for PDF download
+    // Important: Set Content-Type and Content-Disposition BEFORE CORS headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="receipt-${user._id}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
+    
+    // Set CORS headers - allow direct access from email links
+    // Note: When using '*', we cannot use credentials, but for direct downloads this is fine
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Cache-Control', 'no-cache');
+    // Only set credentials if we have a specific origin (not '*')
+    if (allowedOrigin !== '*') {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     
-    // Send the PDF
+    // Send the PDF directly - no redirects
     res.send(pdfBuffer);
-    console.log('PDF sent successfully to origin:', allowedOrigin);
+    console.log('PDF sent successfully. Origin:', origin || 'Direct access', 'Allowed origin:', allowedOrigin);
   } catch (error) {
     console.error('Error serving receipt:', error);
     console.error('Error stack:', error.stack);
@@ -201,11 +258,30 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://stargympetlad.netlify.app'
+      'https://stargympetlad.netlify.app',
+      'https://stargym.netlify.app',
+      'https://starfitnesspetlad.netlify.app'
     ];
     const origin = req.headers.origin;
-    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    let allowedOrigin = '*';
+    if (origin && allowedOrigins.includes(origin)) {
+      allowedOrigin = origin;
+    } else if (origin && process.env.NODE_ENV === 'development') {
+      allowedOrigin = origin;
+    } else if (!origin) {
+      // Direct access from email - construct origin from request
+      const protocol = req.protocol || 'https';
+      const host = req.get('host') || req.headers.host;
+      if (host) {
+        allowedOrigin = `${protocol}://${host}`;
+      }
+    }
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (allowedOrigin !== '*') {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     
     res.status(500).json({
       status: 'error',
