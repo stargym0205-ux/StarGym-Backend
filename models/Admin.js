@@ -14,7 +14,9 @@ const adminSchema = new mongoose.Schema({
     required: [true, 'Please provide a password'],
     minlength: 8,
     select: false
-  }
+  },
+  passwordResetToken: String,
+  passwordResetExpires: Date
 });
 
 adminSchema.methods.correctPassword = async function(candidatePassword, userPassword) {

@@ -143,7 +143,7 @@ exports.register = async (req, res) => {
       console.error('Error sending welcome email:', emailError);
     }
     try {
-      const text = `Hi ${user.name}, welcome to Gold Gym! Your plan ${user.plan} starts on ${new Date(user.startDate).toLocaleDateString()} and ends on ${new Date(user.endDate).toLocaleDateString()}.`;
+      const text = `Hi ${user.name}, welcome to Star Gym! Your plan ${user.plan} starts on ${new Date(user.startDate).toLocaleDateString()} and ends on ${new Date(user.endDate).toLocaleDateString()}.`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp welcome message error:', waError);
@@ -201,7 +201,7 @@ exports.approvePayment = async (req, res) => {
     console.log('Generated Receipt URL:', receiptUrl);
     
     // Prepend base URL to create full download URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-kohl.vercel.app';
     const finalReceiptUrl = `${baseUrl}${receiptUrl}`;
     console.log('Final Receipt URL:', finalReceiptUrl);
 
@@ -284,7 +284,7 @@ exports.approvePayment = async (req, res) => {
     });
     // WhatsApp confirmation
     try {
-      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}.`;
+      const text = `Payment confirmed for your Star Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}.`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp payment confirm error:', waError);
@@ -310,6 +310,11 @@ exports.getAllUsers = async (req, res) => {
     const users = await User.find({ isDeleted: { $ne: true } });
     
     // Process users to ensure photo URLs are correct
+    const assetBaseUrl =
+      process.env.BASE_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      'https://gym-backend-mz5w.onrender.com';
+
     const processedUsers = users.map(user => {
       const userObj = user.toObject();
       
@@ -320,12 +325,12 @@ exports.getAllUsers = async (req, res) => {
       
       // For backward compatibility with old local paths
       if (userObj.photo && userObj.photo.startsWith('/uploads/')) {
-        userObj.photo = `${process.env.BASE_URL}${userObj.photo}`;
+        userObj.photo = `${assetBaseUrl}${userObj.photo}`;
       }
       
       // For default avatar
       if (userObj.photo === '/default-avatar.png') {
-        userObj.photo = `${process.env.BASE_URL}${userObj.photo}`;
+        userObj.photo = `${assetBaseUrl}${userObj.photo}`;
       }
       
       return userObj;
@@ -548,7 +553,7 @@ exports.notifyExpiredMember = async (req, res) => {
 
     // Use environment variable for frontend URL; default to live site in production
     const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-      ? 'https://goldgympetlad.netlify.app'
+      ? 'https://stargympetlad.netlify.app'
       : 'http://localhost:5173');
     const renewalUrl = `${frontendUrl}/renew-membership/${renewalToken}`;
 
@@ -586,7 +591,7 @@ exports.notifyExpiredMember = async (req, res) => {
         `
       });
       try {
-        const text = `Hi ${user.name}, your Gold Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
+        const text = `Hi ${user.name}, your Star Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
         await sendWhatsAppText({ phone: user.phone, message: text });
       } catch (waError) {
         console.error('WhatsApp expired notify error:', waError);
@@ -793,7 +798,7 @@ exports.renewMembership = async (req, res) => {
     });
     // WhatsApp renewal received
     try {
-      const text = `Hi ${user.name}, your Gold Gym renewal request for ${getPlanDisplayName(plan)} has been received. Start: ${new Date(startDate).toLocaleDateString()}, End: ${new Date(endDate).toLocaleDateString()}.`;
+      const text = `Hi ${user.name}, your Star Gym renewal request for ${getPlanDisplayName(plan)} has been received. Start: ${new Date(startDate).toLocaleDateString()}, End: ${new Date(endDate).toLocaleDateString()}.`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp renewal message error:', waError);
@@ -836,7 +841,7 @@ exports.rejectRenewal = async (req, res) => {
     // Send rejection email
     await sendEmail({
       email: user.email,
-      subject: 'Membership Renewal Request Rejected - Gold Gym',
+      subject: 'Membership Renewal Request Rejected - Star Gym',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333; text-align: center;">Renewal Request Rejected</h1>
@@ -860,7 +865,7 @@ exports.rejectRenewal = async (req, res) => {
     });
     // WhatsApp rejection notice
     try {
-      const text = `Hi ${user.name}, your Gold Gym renewal request was rejected. Please contact support if you have questions.`;
+      const text = `Hi ${user.name}, your Star Gym renewal request was rejected. Please contact support if you have questions.`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp renewal reject error:', waError);

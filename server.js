@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const authRoutes = require('./routes/authRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const sendEmail = require('./services/emailService');
 const { checkExpiredSubscriptions } = require('./services/subscriptionService');
 const healthRoutes = require('./routes/healthRoutes');
@@ -17,9 +18,41 @@ const whatsappRoutes = require('./routes/whatsappRoutes');
 
 const app = express();
 
-// CORS configuration
+// CORS configuration - Support multiple production domains
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://gym-frontend-hz0n.onrender.com',
+  'https://stargym.netlify.app',
+  'https://starfitnesspetlad.netlify.app',
+  'https://stargympetlad.netlify.app'
+];
+
+// Add environment-specific origins
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+if (process.env.NETLIFY_URL) {
+  allowedOrigins.push(process.env.NETLIFY_URL);
+}
+
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://gym-frontend-hz0n.onrender.com', 'https://goldgym.netlify.app', 'https://starfitnesspetlad.netlify.app', 'https://goldgympetlad.netlify.app'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // In development, allow all origins
+      if (process.env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
@@ -37,9 +70,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Add headers for all responses
+// Add headers for all responses (CORS middleware handles this, but keep for compatibility)
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else if (process.env.NODE_ENV === 'development') {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -77,17 +115,29 @@ app.get('/', (req, res) => {
 // Mount routes
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 
 // Receipt download endpoint
-const { generateReceiptForDownload } = require('./services/pdfService');
+const { generateReceiptForDownload, generateAllMembersPDF } = require('./services/pdfService');
 const User = require('./models/User');
+const { protect } = require('./middleware/auth');
+
+// Health check for receipt service
+app.get('/api/receipt/health', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Receipt service is running',
+    timestamp: new Date().toISOString()
+  });
+});
 
 app.get('/api/receipt/download/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     console.log('Receipt download requested for user ID:', userId);
+    console.log('Request origin:', req.headers.origin);
     
     // Find the user
     const user = await User.findById(userId);
@@ -104,27 +154,112 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     
     console.log('Generating PDF for user:', user.name);
     
-    // Generate PDF on-demand
-    const pdfBuffer = await generateReceiptForDownload(user);
-    console.log('PDF generated successfully, size:', pdfBuffer.length);
+    // Generate PDF on-demand with timeout
+    console.log('Starting PDF generation...');
+    const pdfBuffer = await Promise.race([
+      generateReceiptForDownload(user),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('PDF generation timeout')), 30000)
+      )
+    ]);
+    
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Generated PDF is empty');
+    }
+    
+    console.log('PDF generated successfully, size:', pdfBuffer.length, 'bytes');
+    
+    // Determine allowed origin - support both localhost and production
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://stargympetlad.netlify.app',
+      'https://stargym.netlify.app',
+      'https://starfitnesspetlad.netlify.app'
+    ];
+    const origin = req.headers.origin;
+    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
     
     // Set headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="receipt-${user._id}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://goldgympetlad.netlify.app');
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    // Send the PDF
+    res.send(pdfBuffer);
+    console.log('PDF sent successfully to origin:', allowedOrigin);
+  } catch (error) {
+    console.error('Error serving receipt:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Set CORS headers even for errors
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://stargympetlad.netlify.app'
+    ];
+    const origin = req.headers.origin;
+    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate receipt',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Download all members PDF endpoint (protected)
+app.get('/api/members/download-pdf', protect, async (req, res) => {
+  try {
+    console.log('All members PDF download requested');
+    
+    // Fetch all users
+    const users = await User.find({ isDeleted: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    if (!users || users.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No members found'
+      });
+    }
+    
+    console.log(`Generating PDF for ${users.length} members`);
+    
+    // Generate PDF
+    const pdfBuffer = await generateAllMembersPDF(users);
+    console.log('PDF generated successfully, size:', pdfBuffer.length);
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `all-members-report-${timestamp}.pdf`;
+    
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://stargympetlad.netlify.app');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
     // Send the PDF
     res.send(pdfBuffer);
     console.log('PDF sent successfully');
   } catch (error) {
-    console.error('Error serving receipt:', error);
+    console.error('Error generating all members PDF:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to generate receipt',
+      message: 'Failed to generate members report',
       error: error.message
     });
   }

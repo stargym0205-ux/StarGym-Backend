@@ -13,22 +13,59 @@ router.post('/register', upload.single('photo'), handleUploadError, userControll
 router.get('/verify-renewal-token/:token', userController.verifyRenewalToken);
 router.post('/renew-membership/:token', userController.renewMembership);
 
-// Protected routes - require authentication
+// Protected routes - require authentication (all routes below require admin authentication)
 router.use(protect);
 
 // Admin only routes
 router.get('/', userController.getAllUsers);
-router.patch('/approve/:userId', protect, userController.approvePayment);
-router.patch('/:id', protect, userController.updateUser);
-router.delete('/:id', protect, userController.deleteUser);
-router.post('/notify-expired/:userId', protect, userController.notifyExpiredMember);
-router.patch('/reject-renewal/:userId', protect, userController.rejectRenewal);
+router.patch('/approve/:userId', userController.approvePayment);
+router.patch('/:id', userController.updateUser);
+router.delete('/:id', userController.deleteUser);
+router.post('/notify-expired/:userId', userController.notifyExpiredMember);
+router.patch('/reject-renewal/:userId', userController.rejectRenewal);
 
 // Add membership history
-router.post('/:userId/membership-history', protect, userController.addMembershipHistory);
+router.post('/:userId/membership-history', userController.addMembershipHistory);
 
-// Get membership history
-router.get('/:userId/membership-history', protect, async (req, res) => {
+// Get all membership history entries (including deleted users) for revenue calculations
+// IMPORTANT: This route must come before /:userId/membership-history to avoid route conflicts
+router.get('/membership-history/all', async (req, res) => {
+  try {
+    // Fetch all users including deleted ones for revenue calculations
+    // Revenue data must be preserved even after member deletion for accounting purposes
+    const users = await User.find({}).select('_id membershipHistory');
+    
+    const allEntries = [];
+    users.forEach(user => {
+      if (user.membershipHistory && user.membershipHistory.length > 0) {
+        user.membershipHistory.forEach(entry => {
+          if (entry && entry.paymentStatus === 'confirmed') {
+            allEntries.push({
+              ...entry.toObject(),
+              userId: user._id.toString()
+            });
+          }
+        });
+      }
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        membershipHistory: allEntries
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all membership history:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching all membership history'
+    });
+  }
+});
+
+// Get membership history for a specific user
+router.get('/:userId/membership-history', async (req, res) => {
   try {
     const { userId } = req.params;
     const { startDate, endDate, type } = req.query;

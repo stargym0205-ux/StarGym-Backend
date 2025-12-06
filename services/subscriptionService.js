@@ -48,7 +48,7 @@ const checkExpiredSubscriptions = async () => {
         `
       });
       try {
-        const text = `Hi ${user.name}, your Gold Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
+        const text = `Hi ${user.name}, your Star Gym membership expired on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
         await sendWhatsAppText({ phone: user.phone, message: text });
       } catch (waError) {
         console.error('WhatsApp expired notify error:', waError);
@@ -82,7 +82,7 @@ const checkExpiredSubscriptions = async () => {
         `
       });
       try {
-        const text = `Hi ${user.name}, your Gold Gym membership expires in ${daysLeft} days on ${new Date(user.endDate).toLocaleDateString()}.`;
+        const text = `Hi ${user.name}, your Star Gym membership expires in ${daysLeft} days on ${new Date(user.endDate).toLocaleDateString()}.`;
         await sendWhatsAppText({ phone: user.phone, message: text });
       } catch (waError) {
         console.error('WhatsApp expiry soon error:', waError);
@@ -102,6 +102,8 @@ const calculateMonthlyRevenue = async (year, month) => {
     const result = await User.aggregate([
       {
         $match: {
+          // Include all users (including deleted ones) for revenue calculations
+          // Revenue data must be preserved even after member deletion for accounting purposes
           'membershipHistory.date': {
             $gte: startDate,
             $lte: endDate
@@ -190,6 +192,8 @@ const calculateYearlyRevenue = async (year) => {
     const result = await User.aggregate([
       {
         $match: {
+          // Include all users (including deleted ones) for revenue calculations
+          // Revenue data must be preserved even after member deletion for accounting purposes
           'membershipHistory.date': {
             $gte: startDate,
             $lte: endDate
@@ -277,6 +281,8 @@ const calculateRevenueByPlan = async () => {
       },
       {
         $match: {
+          // Include all users (including deleted ones) for revenue calculations
+          // Revenue data must be preserved even after member deletion for accounting purposes
           'membershipHistory.paymentStatus': 'confirmed'
         }
       },

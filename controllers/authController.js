@@ -1,8 +1,10 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const Admin = require('../models/Admin');
 const { generateReceipt } = require('../services/pdfService');
 const User = require('../models/User');
-const { sendEmail, createPaymentConfirmationEmail } = require('../services/emailService');
+const { sendEmail, createPaymentConfirmationEmail, createPasswordResetEmail } = require('../services/emailService');
 const { sendWhatsAppText } = require('../services/whatsappService');
 const { getPlanAmount, getPlanDisplayName } = require('../utils/formatters');
 
@@ -82,11 +84,14 @@ exports.login = async (req, res) => {
     );
 
     // Set token in HTTP-only cookie for better security
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      secure: isProduction, // Only send over HTTPS in production
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site requests in production
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      domain: isProduction ? undefined : undefined, // Let browser set domain automatically
+      path: '/'
     });
 
     // Also send token in response body for client-side storage
@@ -111,6 +116,132 @@ exports.verifyToken = async (req, res) => {
   });
 };
 
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide your email address'
+      });
+    }
+
+    // Find admin by email
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
+
+    // Always return success message for security (don't reveal if email exists)
+    if (!admin) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Save hashed token and expiration (10 minutes)
+    admin.passwordResetToken = hashedToken;
+    admin.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await admin.save({ validateBeforeSave: false });
+
+    // Create reset URL
+    const baseUrl = process.env.FRONTEND_URL || process.env.BASE_URL || 'http://localhost:5173';
+    const resetURL = `${baseUrl}/admin/reset-password/${resetToken}`;
+
+    try {
+      // Send email with reset link
+      await sendEmail({
+        email: admin.email,
+        subject: 'Password Reset Request - Star Gym Admin',
+        html: createPasswordResetEmail(resetURL)
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Password reset link has been sent to your email'
+      });
+    } catch (error) {
+      // If email fails, clear the reset token
+      admin.passwordResetToken = undefined;
+      admin.passwordResetExpires = undefined;
+      await admin.save({ validateBeforeSave: false });
+
+      console.error('Error sending password reset email:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Error sending email. Please try again later.'
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred. Please try again later.'
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide a new password'
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Password must be at least 8 characters long'
+      });
+    }
+
+    // Hash the token to compare with stored token
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find admin with valid reset token
+    const admin = await Admin.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+
+    if (!admin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    admin.password = await bcrypt.hash(password, salt);
+
+    // Clear reset token fields
+    admin.passwordResetToken = undefined;
+    admin.passwordResetExpires = undefined;
+
+    await admin.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Password has been reset successfully'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred. Please try again later.'
+    });
+  }
+};
+
 exports.approvePayment = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -128,7 +259,7 @@ exports.approvePayment = async (req, res) => {
     console.log('Generated Receipt URL:', receiptUrl);
     
     // Prepend base URL to create full download URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-mz5w.onrender.com';
+    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-kohl.vercel.app';
     const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
@@ -166,7 +297,7 @@ exports.approvePayment = async (req, res) => {
     });
     // WhatsApp confirmation
     try {
-      const text = `Payment confirmed for your Gold Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}. Receipt: ${fullReceiptUrl}`;
+      const text = `Payment confirmed for your Star Gym ${user.plan} plan. Start: ${new Date(user.startDate).toLocaleDateString()}, End: ${new Date(user.endDate).toLocaleDateString()}. Receipt: ${fullReceiptUrl}`;
       await sendWhatsAppText({ phone: user.phone, message: text });
     } catch (waError) {
       console.error('WhatsApp payment confirm error:', waError);
