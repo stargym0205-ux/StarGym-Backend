@@ -217,7 +217,57 @@ const sendEmail = async (options) => {
   }
 };
 
-// Template for password reset
+// Template for password reset OTP
+const createPasswordResetOTPEmail = (otp) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Password Reset OTP - Star Gym Admin</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f8f8; padding: 20px;">
+      <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #333; margin: 0;">Password Reset OTP 🔐</h1>
+          <p style="color: #666; margin-top: 10px;">Star Gym Admin Panel</p>
+        </div>
+
+        <div style="margin-bottom: 30px;">
+          <p style="color: #444; font-size: 16px;">Hello,</p>
+          <p style="color: #444; line-height: 1.5;">You requested to reset your password for your Star Gym admin account. Use the OTP below to verify your identity:</p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0; padding: 30px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border-radius: 15px;">
+          <p style="color: #fff; margin: 0 0 15px 0; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">Your OTP Code</p>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; display: inline-block; min-width: 200px;">
+            <p style="color: #f59e0b; margin: 0; font-size: 36px; font-weight: bold; letter-spacing: 8px; font-family: 'Courier New', monospace;">${otp}</p>
+          </div>
+        </div>
+
+        <div style="background-color: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 30px;">
+          <p style="color: #f57c00; margin: 0; font-weight: bold;">⚠️ Important:</p>
+          <ul style="color: #666; margin: 10px 0 0 0; padding-left: 20px;">
+            <li>This OTP will expire in 10 minutes</li>
+            <li>If you didn't request this, please ignore this email</li>
+            <li>For security, never share this OTP with anyone</li>
+            <li>Enter this OTP on the password reset page to continue</li>
+          </ul>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
+          <p style="color: #666; margin: 0;">📧 Email: admin@gmail.com</p>
+          <p style="color: #666; margin: 5px 0;">📞 Phone: 9101321032</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Template for password reset (legacy - kept for backward compatibility)
 const createPasswordResetEmail = (resetURL) => {
   return `
     <!DOCTYPE html>
@@ -276,5 +326,6 @@ module.exports = {
   sendEmail, 
   createRegistrationEmail,
   createPaymentConfirmationEmail,
-  createPasswordResetEmail
+  createPasswordResetEmail,
+  createPasswordResetOTPEmail
 };

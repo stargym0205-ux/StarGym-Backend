@@ -216,6 +216,95 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
   }
 });
 
+// Preview receipt endpoint (serves PDF inline for viewing in browser)
+app.get('/api/receipt/preview/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log('Receipt preview requested for user ID:', userId);
+    
+    // Find the user
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+        userId: userId
+      });
+    }
+    
+    console.log('Generating PDF for preview, user:', user.name);
+    
+    // Generate PDF on-demand with timeout
+    const pdfBuffer = await Promise.race([
+      generateReceiptForDownload(user),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('PDF generation timeout')), 30000)
+      )
+    ]);
+    
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Generated PDF is empty');
+    }
+    
+    console.log('PDF generated successfully for preview, size:', pdfBuffer.length, 'bytes');
+    
+    // Determine allowed origin
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://stargympetlad.netlify.app',
+      'https://stargym.netlify.app',
+      'https://starfitnesspetlad.netlify.app'
+    ];
+    const origin = req.headers.origin;
+    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    
+    // Set headers for PDF preview (inline instead of attachment)
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="receipt-${user._id}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    // Send the PDF
+    res.send(pdfBuffer);
+    console.log('PDF preview sent successfully to origin:', allowedOrigin);
+  } catch (error) {
+    console.error('Error serving receipt preview:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      userId: req.params.userId
+    });
+    
+    // Set CORS headers even for errors
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://stargympetlad.netlify.app',
+      'https://stargym.netlify.app',
+      'https://starfitnesspetlad.netlify.app'
+    ];
+    const origin = req.headers.origin;
+    const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate receipt preview',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Download all members PDF endpoint (protected)
 app.get('/api/members/download-pdf', protect, async (req, res) => {
   try {

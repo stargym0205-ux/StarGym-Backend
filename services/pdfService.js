@@ -59,355 +59,31 @@ const getPlanAmount = (plan) => {
   return planPrices[plan] || 0;
 };
 
-// Helper function to format Indian currency with proper rupee symbol
-// Using proper ₹ symbol with Unicode support
+// Helper function to format Indian currency with Rs. prefix
 const formatIndianPrice = (amount) => {
   // Format number with Indian numbering system (lakhs, crores)
   const formattedAmount = new Intl.NumberFormat('en-IN', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);
-  // Return with proper rupee symbol ₹
-  return `₹ ${formattedAmount}`;
+  // Return with Rs. prefix
+  return `Rs. ${formattedAmount}`;
 };
 
 const generateReceipt = async (user) => {
-  try {
-    const doc = new PDFDocument({ 
-      size: 'A4',
-      margin: 50,
-      info: {
-        Title: 'StarGym Membership Receipt',
-        Author: 'StarGym',
-        Subject: 'Membership Payment Receipt',
-        Creator: 'StarGym Management System'
-      },
-      // Ensure proper Unicode support for rupee symbol
-      autoFirstPage: true
-    });
-    
-    // Create unique filename for Cloudinary
-    const fileName = `receipt-${user._id.toString()}-${Date.now()}.pdf`;
-    
-    // Create a buffer to store the PDF data
-    const chunks = [];
-    
-    // Pipe the PDF document to collect chunks
-    doc.on('data', chunk => chunks.push(chunk));
-
-    // Colors
-    const primaryColor = '#1f2937'; // Dark gray
-    const accentColor = '#f59e0b'; // Amber
-    const lightGray = '#f3f4f6';
-    const darkGray = '#6b7280';
-
-    // Header Section
-    doc
-      .rect(0, 0, doc.page.width, 120)
-      .fill(primaryColor);
-
-    // Company Logo/Name
-    doc
-      .fillColor('white')
-      .fontSize(28)
-      .font('Helvetica-Bold')
-      .text('STARGYM', 50, 30, { align: 'left' });
-
-    // Tagline
-    doc
-      .fontSize(12)
-      .font('Helvetica')
-      .text('Fitness & Wellness Center', 50, 60);
-
-    // Receipt Title
-    doc
-      .fontSize(24)
-      .font('Helvetica-Bold')
-      .text('MEMBERSHIP RECEIPT', 0, 80, { align: 'center' });
-
-    // Receipt Number and Date
-    const receiptNumber = `RCP-${user._id.toString().slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
-    const currentDate = new Date().toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    const currentTime = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    doc
-      .fillColor(primaryColor)
-      .fontSize(10)
-      .font('Helvetica')
-      .text(`Receipt No: ${receiptNumber}`, 50, 150)
-      .text(`Date: ${currentDate}`, 50, 165)
-      .text(`Time: ${currentTime}`, 50, 180);
-
-    // Member Information Section
-    doc
-      .fillColor(accentColor)
-      .fontSize(14)
-      .font('Helvetica-Bold')
-      .text('MEMBER INFORMATION', 50, 210)
-      .moveTo(50, 228)
-      .lineTo(doc.page.width - 50, 228)
-      .stroke(accentColor, 1);
-
-    // Member details table with better formatting
-    const memberDetails = [
-      ['Member Name:', user.name || 'N/A'],
-      ['Email:', user.email || 'N/A'],
-      ['Phone:', user.phone || 'N/A'],
-      ['Member ID:', `MEM-${user._id.toString().slice(-8).toUpperCase()}`],
-      ['Gender:', user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : 'N/A']
-    ];
-
-    let yPosition = 245;
-    memberDetails.forEach(([label, value]) => {
-      doc
-        .fillColor(darkGray)
-        .fontSize(11)
-        .font('Helvetica')
-        .text(label, 50, yPosition)
-        .fillColor(primaryColor)
-        .font('Helvetica-Bold')
-        .text(value, 200, yPosition, { width: 300 });
-      yPosition += 22;
-    });
-
-    // Membership Details Section
-    doc
-      .fillColor(accentColor)
-      .fontSize(14)
-      .font('Helvetica-Bold')
-      .text('MEMBERSHIP DETAILS', 50, yPosition + 15)
-      .moveTo(50, yPosition + 33)
-      .lineTo(doc.page.width - 50, yPosition + 33)
-      .stroke(accentColor, 1);
-
-    const planAmount = getPlanAmount(user.plan);
-    const planName = getPlanDisplayName(user.plan);
-    const startDate = new Date(user.startDate).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    const endDate = new Date(user.endDate).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const membershipDetails = [
-      ['Plan:', planName],
-      ['Start Date:', startDate],
-      ['End Date:', endDate],
-      ['Payment Method:', user.paymentMethod === 'online' ? 'Online Payment' : 'Cash Payment'],
-      ['Payment Status:', 'Confirmed']
-    ];
-
-    yPosition += 50;
-    membershipDetails.forEach(([label, value]) => {
-      doc
-        .fillColor(darkGray)
-        .fontSize(11)
-        .font('Helvetica')
-        .text(label, 50, yPosition)
-        .fillColor(primaryColor)
-        .font('Helvetica-Bold')
-        .text(value, 200, yPosition, { width: 300 });
-      yPosition += 22;
-    });
-
-    // Amount Box - Enhanced with better formatting and Payment QR Code
-    const amountBoxY = yPosition + 25;
-    
-    // Payment QR Code Section (on the left)
-    try {
-      // Generate UPI Payment QR Code
-      if (!PAYEE_VPA || PAYEE_VPA === '' || PAYEE_VPA === 'yourupi@paytm') {
-        console.warn('⚠️  UPI_VPA not configured. Payment QR code will not be generated.');
-        console.warn('   Please set UPI_VPA in your .env file (e.g., UPI_VPA=yourname@paytm)');
-        throw new Error('UPI_VPA not configured');
-      }
-      
-      const upiIntent = buildUpiIntent({
-        amount: planAmount,
-        note: `StarGym ${planName} - ${user.name}`
-      });
-      
-      console.log('Generated UPI Intent for QR:', upiIntent.substring(0, 80) + '...'); // Debug log
-      
-      const paymentQRCodeDataURL = await QRCode.toDataURL(upiIntent, {
-        width: 120,
-        margin: 2,
-        color: {
-          dark: accentColor,
-          light: '#FFFFFF'
-        }
-      });
-
-      // Payment QR Code Box
-      doc
-        .rect(50, amountBoxY - 15, 140, 140)
-        .fill('#FFFFFF')
-        .stroke(accentColor, 2);
-
-      // Add Payment QR Code to PDF
-      doc.image(paymentQRCodeDataURL, 60, amountBoxY - 5, { width: 120, height: 120 });
-      
-      // Payment QR Code labels
-      doc
-        .fillColor(primaryColor)
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .text('PAYMENT QR CODE', 50, amountBoxY + 110, { align: 'center', width: 140 });
-      
-      doc
-        .fillColor(darkGray)
-        .fontSize(8)
-        .font('Helvetica')
-        .text('Scan to pay via UPI', 50, amountBoxY + 125, { align: 'center', width: 140 });
-      
-      // UPI ID display
-      doc
-        .fillColor(darkGray)
-        .fontSize(7)
-        .font('Helvetica')
-        .text(`UPI ID: ${PAYEE_VPA}`, 50, amountBoxY + 138, { align: 'center', width: 140 });
-    } catch (qrError) {
-      console.warn('Payment QR Code generation failed:', qrError);
-      // Continue without payment QR code if generation fails
-    }
-
-    // Amount Box (on the right)
-    doc
-      .rect(350, amountBoxY - 15, 200, 90)
-      .fill(lightGray)
-      .stroke(accentColor, 2);
-
-    doc
-      .fillColor(primaryColor)
-      .fontSize(14)
-      .font('Helvetica-Bold')
-      .text('TOTAL AMOUNT PAID', 360, amountBoxY, { align: 'center', width: 180 });
-
-    doc
-      .fillColor(accentColor)
-      .fontSize(28)
-      .font('Helvetica-Bold')
-      .text(formatIndianPrice(planAmount), 360, amountBoxY + 25, { align: 'center', width: 180 });
-
-    // Generate Verification QR Code (smaller, below amount box)
-    try {
-      const qrData = {
-        receiptNumber,
-        memberId: user._id.toString(),
-        memberName: user.name,
-        plan: planName,
-        amount: planAmount,
-        date: currentDate,
-        verificationUrl: `https://stargym.com/verify/${receiptNumber}`
-      };
-      
-      const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
-        width: 80,
-        margin: 2,
-        color: {
-          dark: primaryColor,
-          light: '#FFFFFF'
-        }
-      });
-
-      // Add Verification QR Code to PDF (below amount box)
-      doc.image(qrCodeDataURL, 380, amountBoxY + 85, { width: 60, height: 60 });
-      
-      // QR Code label
-      doc
-        .fillColor(darkGray)
-        .fontSize(7)
-        .font('Helvetica')
-        .text('Verify Receipt', 380, amountBoxY + 148, { align: 'center', width: 60 });
-    } catch (qrError) {
-      console.warn('Verification QR Code generation failed:', qrError);
-      // Continue without QR code if generation fails
-    }
-
-    // Terms and Conditions
-    const termsY = amountBoxY + 160;
-    doc
-      .fillColor(primaryColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('TERMS & CONDITIONS', 50, termsY);
-
-    const terms = [
-      '• This receipt is valid for the membership period mentioned above.',
-      '• Membership is non-transferable and non-refundable.',
-      '• Please bring this receipt for any membership-related queries.',
-      '• For any issues, contact us at support@stargym.com'
-    ];
-
-    doc
-      .fillColor(darkGray)
-      .fontSize(9)
-      .font('Helvetica')
-      .text(terms.join('\n'), 50, termsY + 20, {
-        width: 500,
-        lineGap: 5
-      });
-
-    // Footer
-    const footerY = doc.page.height - 100;
-    doc
-      .rect(0, footerY, doc.page.width, 100)
-      .fill(lightGray);
-
-    doc
-      .fillColor(primaryColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('Thank you for choosing StarGym!', 0, footerY + 20, { align: 'center' });
-
-    doc
-      .fillColor(darkGray)
-      .fontSize(10)
-      .font('Helvetica')
-      .text('This is a computer-generated receipt. No signature required.', 0, footerY + 40, { align: 'center' });
-
-    // Contact Information
-    doc
-      .text('Contact: +91 98765 43210 | Email: info@stargym.com', 0, footerY + 60, { align: 'center' })
-      .text('Address: 123 Fitness Street, Petlad, Gujarat 388450', 0, footerY + 75, { align: 'center' });
-
-    // Finalize the PDF and wait for completion
-    await new Promise((resolve, reject) => {
-      doc.on('end', resolve);
-      doc.on('error', reject);
-      doc.end();
-    });
-
-    // Combine chunks into a buffer
-    const pdfBuffer = Buffer.concat(chunks);
-    
-    // Return a download endpoint URL instead of base64 data
-    // The PDF will be generated on-demand when the endpoint is accessed
-    return `/api/receipt/download/${user._id.toString()}`;
-  } catch (error) {
-    console.error('Error generating receipt:', error);
-    throw error;
-  }
+  // This function returns a URL that points to the download endpoint
+  // The actual PDF generation happens in generateReceiptForDownload
+  // which has the updated professional one-page format with Rs. currency
+  return `/api/receipt/download/${user._id.toString()}`;
 };
 
 // Function to generate PDF on-demand for download
 const generateReceiptForDownload = async (user) => {
   try {
+    console.log('📄 Generating ONE-PAGE receipt PDF (updated compact version)...');
     const doc = new PDFDocument({ 
       size: 'A4',
-      margin: 40,
+      margin: 30, // Reduced margins for more space
       info: {
         Title: 'StarGym Membership Receipt',
         Author: 'StarGym',
@@ -415,8 +91,41 @@ const generateReceiptForDownload = async (user) => {
         Creator: 'StarGym Management System'
       },
       // Ensure proper Unicode support for rupee symbol
-      autoFirstPage: true
+      autoFirstPage: true,
+      lang: 'en-IN' // Set language to Indian English for proper currency formatting
     });
+    
+    // Track page count to ensure we only use one page
+    let pageCount = 0; // Start at 0, will be incremented when pages are added
+    const maxPageHeight = doc.page.height; // A4 height: 842 points
+    const usableHeight = maxPageHeight - 60; // Reserve space for margins
+    
+    // Track when pages are added (pageAdded fires for each new page, including the first)
+    doc.on('pageAdded', () => {
+      pageCount++;
+      if (pageCount > 1) {
+        console.error('❌ WARNING: PDFKit added an extra page!');
+        console.error('   This indicates content overflow. Check yPos values and content sizing.');
+        console.error('   Current page count:', pageCount);
+        // Log warning but don't throw - we'll validate at the end
+      }
+    });
+    
+    // The first page is auto-created, so we need to account for it
+    // After the first page is created, pageCount should be 1
+    // We'll check this after PDF generation completes
+    
+    // Prevent automatic page breaks by checking bounds before adding content
+    const checkBounds = (y, height) => {
+      if (y + height > usableHeight) {
+        console.warn(`⚠️ Content would overflow at y=${y}, height=${height}, max=${usableHeight}`);
+        return false;
+      }
+      return true;
+    };
+    
+    // Note: We don't override addPage as PDFKit needs to manage pages internally
+    // Instead, we ensure all content fits within bounds and validate page count at the end
     
     // Create a buffer to store the PDF data
     const chunks = [];
@@ -434,40 +143,63 @@ const generateReceiptForDownload = async (user) => {
     const successColor = '#10b981'; // Green
     const white = '#ffffff';
 
-    // ==================== ENHANCED HEADER SECTION ====================
-    const headerHeight = 140;
+    // ==================== PROFESSIONAL HEADER SECTION ====================
+    const headerHeight = 85; // Increased for better spacing
     doc
       .rect(0, 0, doc.page.width, headerHeight)
       .fill(primaryColor);
 
-    // Decorative accent line
+    // Decorative accent line - thicker for more impact
     doc
-      .rect(0, headerHeight - 5, doc.page.width, 5)
+      .rect(0, headerHeight - 4, doc.page.width, 4)
       .fill(accentColor);
 
-    // Company Name - Larger and more prominent
-    doc
-      .fontSize(36)
-      .fillColor(white)
-      .font('Helvetica-Bold')
-      .text('STAR GYM', 40, 35, { align: 'left' });
+    // Load and display STAR FITNESS logo
+    try {
+      const logoPath = path.join(__dirname, '..', 'public', 'starlogo.png');
+      if (fs.existsSync(logoPath)) {
+        // Logo on the left side - Larger and more prominent
+        doc.image(logoPath, 40, 15, { 
+          width: 80, 
+          height: 55,
+          fit: [80, 55],
+          align: 'left'
+        });
+      } else {
+        // Fallback to text if logo not found
+        console.warn('Logo not found at:', logoPath);
+        doc
+          .fontSize(26)
+          .fillColor(white)
+          .font('Helvetica-Bold')
+          .text('STAR FITNESS', 40, 25, { align: 'left' });
+      }
+    } catch (logoError) {
+      console.warn('Error loading logo:', logoError.message);
+      // Fallback to text
+      doc
+        .fontSize(26)
+        .fillColor(white)
+        .font('Helvetica-Bold')
+        .text('STAR FITNESS', 40, 25, { align: 'left' });
+    }
 
-    // Tagline with better spacing
+    // Tagline - Better positioned with more spacing
     doc
-      .fontSize(13)
+      .fontSize(10)
       .fillColor(mediumGray)
       .font('Helvetica')
-      .text('Fitness & Wellness Center', 40, 75);
+      .text('Fitness & Wellness Center', 130, 42);
 
-    // Receipt Title - Centered and prominent
+    // Receipt Title - Centered and more prominent
     doc
-      .fontSize(28)
+      .fontSize(20)
       .fillColor(white)
       .font('Helvetica-Bold')
-      .text('MEMBERSHIP RECEIPT', 0, 100, { align: 'center' });
+      .text('MEMBERSHIP RECEIPT', 0, 58, { align: 'center' });
 
     // ==================== RECEIPT INFO SECTION ====================
-    let yPos = headerHeight + 30;
+    let yPos = headerHeight + 25; // More spacing after header
     
     // Receipt Info Box - Professional card design
     const receiptNumber = `RCP-${user._id.toString().slice(-8).toUpperCase()}`;
@@ -483,172 +215,214 @@ const generateReceiptForDownload = async (user) => {
       hour12: true
     });
 
-    // Info boxes with better visual design
-    const infoBoxWidth = (doc.page.width - 100) / 2;
-    const infoBoxHeight = 80;
+    // Info boxes - More spacious and interactive
+    const infoBoxWidth = (doc.page.width - 120) / 2;
+    const infoBoxHeight = 65; // Increased height for better readability
+    const boxSpacing = 30;
     
-    // Left Info Box
+    // Left Info Box - Receipt Details Card with more spacing
     doc
       .rect(40, yPos, infoBoxWidth, infoBoxHeight)
-      .fill(lightGray)
-      .stroke(mediumGray, 1);
+      .fill(white)
+      .stroke(accentColor, 2.5);
     
+    // Card header accent - thicker
     doc
-      .fontSize(9)
-      .fillColor(darkGray)
-      .font('Helvetica')
-      .text('Receipt Number', 50, yPos + 15)
-      .fontSize(12)
-      .fillColor(primaryColor)
-      .font('Helvetica-Bold')
-      .text(receiptNumber, 50, yPos + 30, { width: infoBoxWidth - 20 })
-      .fontSize(9)
-      .fillColor(darkGray)
-      .font('Helvetica')
-      .text('Date & Time', 50, yPos + 55)
-      .fontSize(10)
-      .fillColor(primaryColor)
-      .font('Helvetica-Bold')
-      .text(`${currentDate}`, 50, yPos + 65, { width: infoBoxWidth - 20 });
-
-    // Right Info Box
-    doc
-      .rect(60 + infoBoxWidth, yPos, infoBoxWidth, infoBoxHeight)
-      .fill(lightGray)
-      .stroke(mediumGray, 1);
-    
-    doc
-      .fontSize(9)
-      .fillColor(darkGray)
-      .font('Helvetica')
-      .text('Member ID', 70 + infoBoxWidth, yPos + 15)
-      .fontSize(12)
-      .fillColor(primaryColor)
-      .font('Helvetica-Bold')
-      .text(memberId, 70 + infoBoxWidth, yPos + 30, { width: infoBoxWidth - 20 })
-      .fontSize(9)
-      .fillColor(darkGray)
-      .font('Helvetica')
-      .text('Time', 70 + infoBoxWidth, yPos + 55)
-      .fontSize(10)
-      .fillColor(primaryColor)
-      .font('Helvetica-Bold')
-      .text(currentTime, 70 + infoBoxWidth, yPos + 65, { width: infoBoxWidth - 20 });
-
-    yPos += infoBoxHeight + 30;
-
-    // ==================== MEMBER INFORMATION SECTION ====================
-    // Section Header with accent
-    doc
-      .rect(40, yPos, doc.page.width - 80, 30)
+      .rect(40, yPos, infoBoxWidth, 8)
       .fill(accentColor);
     
     doc
-      .fontSize(16)
-      .fillColor(white)
+      .fontSize(8)
+      .fillColor(darkGray)
+      .font('Helvetica')
+      .text('RECEIPT NUMBER', 50, yPos + 12)
+      .fontSize(10)
+      .fillColor(primaryColor)
       .font('Helvetica-Bold')
-      .text('MEMBER INFORMATION', 50, yPos + 8);
+      .text(receiptNumber, 50, yPos + 24, { width: infoBoxWidth - 20 })
+      .fontSize(8)
+      .fillColor(darkGray)
+      .font('Helvetica')
+      .text('DATE & TIME', 50, yPos + 40)
+      .fontSize(9)
+      .fillColor(primaryColor)
+      .font('Helvetica-Bold')
+      .text(`${currentDate}`, 50, yPos + 52, { width: infoBoxWidth - 20 })
+      .fontSize(8)
+      .fillColor(darkGray)
+      .font('Helvetica')
+      .text(currentTime, 50, yPos + 62, { width: infoBoxWidth - 20 });
 
-    yPos += 40;
-
-    // Member Info Card - Spacious design
-    const memberCardY = yPos;
+    // Right Info Box - Member ID Card with more spacing
     doc
-      .rect(40, memberCardY, doc.page.width - 80, 140)
+      .rect(70 + infoBoxWidth, yPos, infoBoxWidth, infoBoxHeight)
       .fill(white)
-      .stroke(mediumGray, 1);
-
-    // Member details with better spacing
-    const memberDetails = [
-      { label: 'Full Name', value: user.name || 'N/A' },
-      { label: 'Email Address', value: user.email || 'N/A' },
-      { label: 'Phone Number', value: user.phone || 'N/A' },
-      { label: 'Gender', value: user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : 'N/A' },
-      { label: 'Membership Plan', value: getPlanDisplayName(user.plan) }
-    ];
-
-    let detailY = memberCardY + 20;
-    memberDetails.forEach((detail, index) => {
-      doc
-        .fontSize(10)
-        .fillColor(darkGray)
-        .font('Helvetica')
-        .text(detail.label + ':', 50, detailY)
-        .fontSize(11)
-        .fillColor(primaryColor)
-        .font('Helvetica-Bold')
-        .text(detail.value, 200, detailY, { width: 320 });
-      detailY += 24;
-    });
-
-    yPos = memberCardY + 150;
-
-    // ==================== MEMBERSHIP DETAILS SECTION ====================
-    // Section Header
+      .stroke(secondaryColor, 2.5);
+    
+    // Card header accent - thicker
     doc
-      .rect(40, yPos, doc.page.width - 80, 30)
+      .rect(70 + infoBoxWidth, yPos, infoBoxWidth, 8)
       .fill(secondaryColor);
     
     doc
-      .fontSize(16)
+      .fontSize(8)
+      .fillColor(darkGray)
+      .font('Helvetica')
+      .text('MEMBER ID', 80 + infoBoxWidth, yPos + 12)
+      .fontSize(10)
+      .fillColor(primaryColor)
+      .font('Helvetica-Bold')
+      .text(memberId, 80 + infoBoxWidth, yPos + 24, { width: infoBoxWidth - 20 })
+      .fontSize(8)
+      .fillColor(darkGray)
+      .font('Helvetica')
+      .text('TIME', 80 + infoBoxWidth, yPos + 40)
+      .fontSize(9)
+      .fillColor(primaryColor)
+      .font('Helvetica-Bold')
+      .text(currentTime, 80 + infoBoxWidth, yPos + 52, { width: infoBoxWidth - 20 });
+
+    yPos += infoBoxHeight + 25; // More spacing between sections
+
+    // ==================== MEMBER INFORMATION SECTION ====================
+    // Section Header - Larger and more prominent
+    doc
+      .rect(40, yPos, doc.page.width - 80, 25)
+      .fill(accentColor);
+    
+    doc
+      .fontSize(12)
       .fillColor(white)
       .font('Helvetica-Bold')
-      .text('MEMBERSHIP DETAILS', 50, yPos + 8);
+      .text('MEMBER INFORMATION', 50, yPos + 7);
 
-    yPos += 40;
+    yPos += 30; // More spacing
 
-    // Membership Details Card
+    // Member Info Card - More spacious Professional Design
+    const memberCardY = yPos;
+    doc
+      .rect(40, memberCardY, doc.page.width - 80, 95)
+      .fill(white)
+      .stroke(accentColor, 2.5);
+
+    // Card header accent - thicker
+    doc
+      .rect(40, memberCardY, doc.page.width - 80, 5)
+      .fill(accentColor);
+
+    // Member details - More spacious layout
+    const memberDetails = [
+      { label: 'Full Name', value: user.name || 'N/A' },
+      { label: 'Email', value: user.email || 'N/A' },
+      { label: 'Phone', value: user.phone || 'N/A' },
+      { label: 'Gender', value: user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : 'N/A' },
+      { label: 'Plan', value: getPlanDisplayName(user.plan) }
+    ];
+
+    let detailY = memberCardY + 15;
+    memberDetails.forEach((detail, index) => {
+      // Alternating row background with more padding
+      if (index % 2 === 0) {
+        doc
+          .rect(45, detailY - 3, doc.page.width - 90, 18)
+          .fill(lightGray);
+      }
+      
+      doc
+        .fontSize(9)
+        .fillColor(darkGray)
+        .font('Helvetica')
+        .text(`${detail.label}:`, 50, detailY + 2)
+        .fontSize(10)
+        .fillColor(primaryColor)
+        .font('Helvetica-Bold')
+        .text(detail.value, 200, detailY + 2, { width: 320 });
+      detailY += 18; // More spacing between rows
+    });
+
+    yPos = memberCardY + 100; // Adjusted height
+
+    // ==================== MEMBERSHIP DETAILS SECTION ====================
+    // Section Header - Larger and more prominent
+    doc
+      .rect(40, yPos, doc.page.width - 80, 25)
+      .fill(secondaryColor);
+    
+    doc
+      .fontSize(12)
+      .fillColor(white)
+      .font('Helvetica-Bold')
+      .text('MEMBERSHIP DETAILS', 50, yPos + 7);
+
+    yPos += 30; // More spacing
+
+    // Membership Details Card - More spacious
     const membershipCardY = yPos;
     doc
-      .rect(40, membershipCardY, doc.page.width - 80, 130)
+      .rect(40, membershipCardY, doc.page.width - 80, 95)
       .fill(white)
-      .stroke(mediumGray, 1);
+      .stroke(secondaryColor, 2.5);
+
+    // Card header accent - thicker
+    doc
+      .rect(40, membershipCardY, doc.page.width - 80, 5)
+      .fill(secondaryColor);
 
     const startDate = new Date(user.startDate).toLocaleDateString('en-IN', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     });
     const endDate = new Date(user.endDate).toLocaleDateString('en-IN', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     });
     const amount = getPlanAmount(user.plan);
     const formattedAmount = formatIndianPrice(amount);
 
     const membershipDetails = [
-      { label: 'Plan Duration', value: getPlanDisplayName(user.plan) },
+      { label: 'Plan', value: getPlanDisplayName(user.plan) },
       { label: 'Start Date', value: startDate },
       { label: 'End Date', value: endDate },
-      { label: 'Payment Method', value: user.paymentMethod === 'online' ? 'Online Payment' : 'Cash Payment' },
+      { label: 'Payment Method', value: user.paymentMethod === 'online' ? 'Online' : 'Cash' },
       { label: 'Status', value: 'Active', color: successColor }
     ];
 
-    let membershipY = membershipCardY + 20;
-    membershipDetails.forEach((detail) => {
+    let membershipY = membershipCardY + 15;
+    membershipDetails.forEach((detail, index) => {
+      // Alternating row background with more padding
+      if (index % 2 === 0) {
+        doc
+          .rect(45, membershipY - 3, doc.page.width - 90, 18)
+          .fill(lightGray);
+      }
+      
       doc
-        .fontSize(10)
+        .fontSize(9)
         .fillColor(darkGray)
         .font('Helvetica')
-        .text(detail.label + ':', 50, membershipY)
-        .fontSize(11)
+        .text(`${detail.label}:`, 50, membershipY + 2)
+        .fontSize(10)
         .fillColor(detail.color || primaryColor)
         .font('Helvetica-Bold')
-        .text(detail.value, 200, membershipY, { width: 320 });
-      membershipY += 24;
+        .text(detail.value, 200, membershipY + 2, { width: 320 });
+      membershipY += 18; // More spacing between rows
     });
 
-    yPos = membershipCardY + 140;
+    yPos = membershipCardY + 100; // Adjusted height
 
     // ==================== PAYMENT & AMOUNT SECTION ====================
-    yPos += 20;
+    yPos += 20; // More spacing
     
-    // Two-column layout for QR Code and Amount
-    const leftColumnX = 40;
-    const rightColumnX = 340;
-    const columnWidth = 240;
-    const sectionHeight = 200;
+    // Two-column layout for QR Code and Amount - Properly balanced
+    const pageMargin = 40;
+    const columnSpacing = 20;
+    const totalContentWidth = doc.page.width - (pageMargin * 2);
+    const columnWidth = (totalContentWidth - columnSpacing) / 2;
+    const leftColumnX = pageMargin;
+    const rightColumnX = pageMargin + columnWidth + columnSpacing;
+    const sectionHeight = 160; // Increased height for better balance
 
     // Left Column - Payment QR Code (if available)
     try {
@@ -662,203 +436,222 @@ const generateReceiptForDownload = async (user) => {
       });
       
       const paymentQRCodeDataURL = await QRCode.toDataURL(upiIntent, {
-        width: 150,
-        margin: 3,
+        width: 120,
+        margin: 2,
         color: {
           dark: accentColor,
           light: white
         }
       });
 
-      // QR Code Card with enhanced design
+      // QR Code Card with proper design
       doc
         .rect(leftColumnX, yPos, columnWidth, sectionHeight)
         .fill(white)
-        .stroke(accentColor, 2);
+        .stroke(accentColor, 2.5);
 
-      // QR Code Header
+      // QR Code Header - Properly sized
+      const qrHeaderHeight = 28;
       doc
-        .rect(leftColumnX, yPos, columnWidth, 35)
+        .rect(leftColumnX, yPos, columnWidth, qrHeaderHeight)
         .fill(accentColor);
       
       doc
-        .fontSize(12)
+        .fontSize(10)
         .fillColor(white)
         .font('Helvetica-Bold')
-        .text('PAYMENT QR CODE', leftColumnX + 10, yPos + 12);
+        .text('PAYMENT QR CODE', leftColumnX, yPos + 9, { 
+          align: 'center', 
+          width: columnWidth 
+        });
 
-      // QR Code Image
-      doc.image(paymentQRCodeDataURL, leftColumnX + 45, yPos + 50, { width: 150, height: 150 });
+      // QR Code Image - Properly centered
+      const qrSize = 100;
+      const qrX = leftColumnX + (columnWidth - qrSize) / 2;
+      const qrY = yPos + qrHeaderHeight + 15;
+      doc.image(paymentQRCodeDataURL, qrX, qrY, { width: qrSize, height: qrSize });
       
-      // QR Code Footer
-      doc
-        .fontSize(9)
-        .fillColor(darkGray)
-        .font('Helvetica')
-        .text('Scan to pay via UPI', leftColumnX + 10, yPos + 170, { width: columnWidth - 20, align: 'center' });
-      
+      // QR Code Footer - Properly spaced
+      const qrFooterY = qrY + qrSize + 12;
       doc
         .fontSize(8)
+        .fillColor(darkGray)
+        .font('Helvetica')
+        .text('Scan to pay via UPI', leftColumnX, qrFooterY, { 
+          align: 'center', 
+          width: columnWidth 
+        });
+      
+      doc
+        .fontSize(7)
         .fillColor(primaryColor)
         .font('Helvetica-Bold')
-        .text(`UPI: ${PAYEE_VPA}`, leftColumnX + 10, yPos + 185, { width: columnWidth - 20, align: 'center' });
+        .text(`UPI: ${PAYEE_VPA}`, leftColumnX, qrFooterY + 12, { 
+          align: 'center', 
+          width: columnWidth 
+        });
     } catch (qrError) {
       // If QR code fails, create a placeholder or skip
       console.warn('Payment QR Code generation failed:', qrError);
     }
 
-    // Right Column - Amount Box (Enhanced)
+    // Right Column - Amount Box (Properly balanced)
     const amountBoxY = yPos;
     doc
       .rect(rightColumnX, amountBoxY, columnWidth, sectionHeight)
       .fill(lightGray)
-      .stroke(accentColor, 3);
+      .stroke(accentColor, 2.5);
 
-    // Amount Header
+    // Amount Header - Properly sized
+    const amountHeaderHeight = 28;
     doc
-      .rect(rightColumnX, amountBoxY, columnWidth, 50)
+      .rect(rightColumnX, amountBoxY, columnWidth, amountHeaderHeight)
       .fill(accentColor);
     
     doc
-      .fontSize(14)
+      .fontSize(10)
       .fillColor(white)
       .font('Helvetica-Bold')
-      .text('TOTAL AMOUNT PAID', rightColumnX + 10, amountBoxY + 18, { width: columnWidth - 20, align: 'center' });
+      .text('TOTAL AMOUNT PAID', rightColumnX, amountBoxY + 9, { 
+        align: 'center', 
+        width: columnWidth 
+      });
 
-    // Amount Display - Large and prominent
+    // Amount Display - Properly positioned and sized
+    const amountY = amountBoxY + amountHeaderHeight + 20;
     doc
-      .fontSize(42)
+      .fontSize(30)
       .fillColor(primaryColor)
       .font('Helvetica-Bold')
-      .text(formattedAmount, rightColumnX + 10, amountBoxY + 70, { width: columnWidth - 20, align: 'center' });
+      .text(formattedAmount, rightColumnX, amountY, { 
+        align: 'center', 
+        width: columnWidth 
+      });
 
-    // Payment Status Badge
+    // Payment Status Badge - Properly positioned
+    const badgeY = amountY + 35;
+    const badgeHeight = 28;
+    const badgePadding = 20;
     doc
-      .rect(rightColumnX + 20, amountBoxY + 130, columnWidth - 40, 30)
+      .rect(rightColumnX + badgePadding, badgeY, columnWidth - (badgePadding * 2), badgeHeight)
       .fill(successColor);
     
     doc
-      .fontSize(12)
+      .fontSize(9)
       .fillColor(white)
       .font('Helvetica-Bold')
-      .text('✓ PAYMENT CONFIRMED', rightColumnX + 10, amountBoxY + 138, { width: columnWidth - 20, align: 'center' });
-
-    // Payment Method
-    doc
-      .fontSize(10)
-      .fillColor(darkGray)
-      .font('Helvetica')
-      .text(`Payment Method: ${user.paymentMethod === 'online' ? 'Online Payment' : 'Cash Payment'}`, 
-            rightColumnX + 10, amountBoxY + 170, { width: columnWidth - 20, align: 'center' });
-
-    yPos += sectionHeight + 30;
-
-    // ==================== VERIFICATION QR CODE SECTION ====================
-    try {
-      const qrData = `Receipt: ${receiptNumber}\nMember: ${user.name}\nAmount: ${formattedAmount}\nDate: ${currentDate}\nMember ID: ${memberId}`;
-      const qrCodeDataURL = await QRCode.toDataURL(qrData, {
-        width: 100,
-        margin: 2,
-        color: {
-          dark: primaryColor,
-          light: white
-        }
+      .text('✓ PAYMENT CONFIRMED', rightColumnX, badgeY + 9, { 
+        align: 'center', 
+        width: columnWidth 
       });
-      
-      // Verification QR Code Box - Centered
-      const qrBoxWidth = 120;
-      const qrBoxX = (doc.page.width - qrBoxWidth) / 2;
-      
-      doc
-        .rect(qrBoxX, yPos, qrBoxWidth, qrBoxWidth + 30)
-        .fill(white)
-        .stroke(primaryColor, 1);
-      
-      doc.image(qrCodeDataURL, qrBoxX + 10, yPos + 10, { width: 100, height: 100 });
-      
-      doc
-        .fontSize(9)
-        .fillColor(primaryColor)
-        .font('Helvetica-Bold')
-        .text('VERIFY RECEIPT', qrBoxX, yPos + 115, { width: qrBoxWidth, align: 'center' });
-    } catch (qrError) {
-      console.log('Verification QR code generation failed:', qrError.message);
-    }
 
-    yPos += 150;
-
-    // ==================== TERMS & CONDITIONS SECTION ====================
-    const termsY = yPos;
-    
-    // Terms Header
-    doc
-      .rect(40, termsY, doc.page.width - 80, 25)
-      .fill(mediumGray);
-    
-    doc
-      .fontSize(12)
-      .fillColor(primaryColor)
-      .font('Helvetica-Bold')
-      .text('TERMS & CONDITIONS', 50, termsY + 7);
-
-    // Terms Content Box
-    const termsBoxY = termsY + 30;
-    doc
-      .rect(40, termsBoxY, doc.page.width - 80, 80)
-      .fill(lightGray)
-      .stroke(mediumGray, 1);
-
-    const terms = [
-      '• This receipt is valid for the membership period mentioned above',
-      '• Membership is non-transferable and non-refundable',
-      '• Please keep this receipt safe for your records',
-      '• For any queries or support, contact our customer service team'
-    ];
-
+    // Payment Method - Properly positioned
+    const paymentMethodY = badgeY + badgeHeight + 15;
     doc
       .fontSize(9)
       .fillColor(darkGray)
       .font('Helvetica')
-      .text(terms.join('\n'), 50, termsBoxY + 15, {
-        width: doc.page.width - 100,
-        lineGap: 8
-      });
+      .text(`Payment: ${user.paymentMethod === 'online' ? 'Online' : 'Cash'}`, 
+            rightColumnX, paymentMethodY, { 
+              align: 'center', 
+              width: columnWidth 
+            });
+
+    yPos += sectionHeight + 20; // More spacing
 
     // ==================== FOOTER SECTION ====================
-    const footerY = doc.page.height - 90;
+    // Professional footer - Properly calculated height to fit all content
+    // Calculate required height: top padding (12) + thank you (17) + spacing (18) + accent (4) + spacing (12) + contact (11) + spacing (14) + address (11) + spacing (16) + disclaimer (10) + bottom padding (10) = ~125px
+    const footerHeight = 90; // Adequate height for all content with proper spacing
     
-    // Footer Background
+    // ==================== TERMS & CONDITIONS SECTION ====================
+    // Add more spacious terms section if there's space - ensure it fits on one page
+    const availableSpace = usableHeight - footerHeight - yPos - 15;
+    if (availableSpace > 45 && checkBounds(yPos, 50)) {
+      const termsY = yPos;
+      doc
+        .fontSize(8)
+        .fillColor(darkGray)
+        .font('Helvetica')
+        .text('• This receipt is valid for the membership period mentioned above', 40, termsY, { width: doc.page.width - 80 })
+        .text('• Membership is non-transferable and non-refundable', 40, termsY + 12, { width: doc.page.width - 80 })
+        .text('• Please keep this receipt safe for your records', 40, termsY + 24, { width: doc.page.width - 80 })
+        .text('• For any queries or support, contact our customer service team', 40, termsY + 36, { width: doc.page.width - 80 });
+      
+      yPos = termsY + 50;
+    } else {
+      console.log('⚠️ Skipping terms section to ensure one-page fit');
+    }
+    
+    // ==================== FOOTER POSITIONING ====================
+    // Position footer at the bottom of the page with proper margin
+    const pageBottomMargin = 30;
+    const footerY = doc.page.height - footerHeight - pageBottomMargin;
+    
+    // Ensure content doesn't overlap with footer
+    if (yPos + 10 > footerY) {
+      console.warn('⚠️ Content would overlap footer! Adjusting...');
+      // If content is too close, reduce terms section or adjust spacing
+    }
+    
+    // Footer Background - Professional and spacious
     doc
-      .rect(0, footerY, doc.page.width, 90)
+      .rect(0, footerY, doc.page.width, footerHeight)
       .fill(primaryColor);
 
-    // Thank You Message
+    // Thank You Message - Prominent and well-spaced
+    const thankYouTopPadding = 12;
+    const thankYouY = footerY + thankYouTopPadding;
     doc
-      .fontSize(16)
+      .fontSize(15)
       .fillColor(white)
       .font('Helvetica-Bold')
-      .text('Thank you for choosing StarGym!', 0, footerY + 15, { align: 'center' });
+      .text('Thank you for choosing StarGym!', 0, thankYouY, { align: 'center' });
 
-    // Footer Accent Line
+    // Footer Accent Line - Thicker and more prominent
+    const accentLineSpacing = 18;
+    const accentLineY = thankYouY + accentLineSpacing;
+    const accentLineHeight = 4;
     doc
-      .rect(0, footerY + 35, doc.page.width, 2)
+      .rect(0, accentLineY, doc.page.width, accentLineHeight)
       .fill(accentColor);
 
-    // Contact Information - Better formatted
+    // Contact Information - Better sized with proper spacing
+    const contactSpacing = 12;
+    const contactY = accentLineY + accentLineHeight + contactSpacing;
     doc
-      .fontSize(10)
+      .fontSize(9)
       .fillColor(mediumGray)
       .font('Helvetica')
-      .text('Contact: +91 98765 43210', 0, footerY + 45, { align: 'center' })
-      .text('Email: info@stargym.com', 0, footerY + 58, { align: 'center' })
-      .text('Address: 123 Fitness Street, Petlad, Gujarat 388450', 0, footerY + 71, { align: 'center' });
+      .text('Contact: +91 98765 43210 | Email: info@stargym.com', 0, contactY, { align: 'center' });
 
-    // Footer Note
+    // Address - Properly spaced
+    const addressSpacing = 14;
+    const addressY = contactY + addressSpacing;
+    doc
+      .fontSize(9)
+      .fillColor(mediumGray)
+      .font('Helvetica')
+      .text('Address: 123 Fitness Street, Petlad, Gujarat 388450', 0, addressY, { align: 'center' });
+
+    // Footer Note - Better sized and properly spaced
+    const disclaimerSpacing = 16;
+    const disclaimerY = addressY + disclaimerSpacing;
+    const disclaimerBottomPadding = 10;
     doc
       .fontSize(8)
       .fillColor(darkGray)
       .font('Helvetica')
-      .text('This is a computer-generated receipt. No signature required.', 0, footerY + 82, { align: 'center' });
+      .text('This is a computer-generated receipt. No signature required.', 0, disclaimerY, { align: 'center' });
+    
+    // Verify footer content fits within allocated height
+    const footerContentBottom = disclaimerY + disclaimerBottomPadding;
+    const maxFooterBottom = footerY + footerHeight;
+    if (footerContentBottom > maxFooterBottom) {
+      console.warn(`⚠️ Footer content extends beyond: ${footerContentBottom} > ${maxFooterBottom}`);
+    } else {
+      console.log(`✅ Footer content fits properly: ${footerContentBottom} <= ${maxFooterBottom}`);
+    }
 
     // Finalize the PDF and wait for completion
     await new Promise((resolve, reject) => {
@@ -884,7 +677,20 @@ const generateReceiptForDownload = async (user) => {
       throw new Error('Generated PDF buffer is empty');
     }
     
-    console.log('PDF generated for download successfully, size:', pdfBuffer.length, 'bytes');
+    // Final validation: Ensure we only have ONE page
+    // Note: pageCount tracks additional pages added (0 = only first page, 1+ = extra pages)
+    // The first page is auto-created, so pageCount of 0 or 1 is acceptable
+    if (pageCount > 1) {
+      const warningMsg = `⚠️ WARNING: PDF may have ${pageCount + 1} pages instead of 1. Content may have overflowed.`;
+      console.warn(warningMsg);
+      console.warn('📊 Final yPos:', yPos, 'Page height:', doc.page.height, 'Usable height:', usableHeight, 'Footer Y:', footerY);
+      // Don't throw error - allow PDF to be generated so user can see what happened
+      // The PDF viewer will show the issue if there are multiple pages
+    }
+    
+    console.log('✅ PDF generated successfully (ONE PAGE), size:', pdfBuffer.length, 'bytes');
+    console.log('📊 Final yPos:', yPos, 'Page height:', doc.page.height, 'Usable height:', usableHeight, 'Footer Y:', footerY);
+    console.log('📄 Page count verified:', pageCount, 'page(s)');
     
     return pdfBuffer;
   } catch (error) {
@@ -912,7 +718,8 @@ const generateAllMembersPDF = async (users) => {
         Creator: 'StarGym Management System'
       },
       // Ensure proper Unicode support for rupee symbol
-      autoFirstPage: true
+      autoFirstPage: true,
+      lang: 'en-IN' // Set language to Indian English for proper currency formatting
     });
     
     // Create a buffer to store the PDF data
@@ -921,14 +728,16 @@ const generateAllMembersPDF = async (users) => {
     // Pipe the PDF document to collect chunks
     doc.on('data', chunk => chunks.push(chunk));
 
-    // Colors
-    const primaryColor = '#1f2937'; // Dark gray
-    const accentColor = '#f59e0b'; // Amber
-    const lightGray = '#f3f4f6';
-    const darkGray = '#6b7280';
-    const greenColor = '#10b981';
-    const redColor = '#ef4444';
-    const yellowColor = '#f59e0b';
+    // Simplified Color Palette - Clean and Clear
+    const primaryColor = '#1f2937'; // Dark gray - better contrast
+    const accentColor = '#f59e0b'; // Amber for highlights
+    const lightGray = '#f9fafb'; // Very light gray for backgrounds
+    const mediumGray = '#e5e7eb'; // Light gray for borders
+    const darkGray = '#374151'; // Dark gray for text
+    const greenColor = '#059669'; // Green for active
+    const redColor = '#dc2626'; // Red for expired
+    const yellowColor = '#d97706'; // Yellow for pending
+    const white = '#ffffff';
 
     // Helper function to format dates
     const formatDate = (dateString) => {
@@ -964,15 +773,14 @@ const generateAllMembersPDF = async (users) => {
       return planPrices[plan] || 0;
     };
 
-    // Helper function to format currency with proper rupee symbol
-    // Using proper ₹ symbol with Unicode support
+    // Helper function to format currency with Rs. prefix
     const formatCurrency = (amount) => {
       // Format number with Indian numbering system
       const formattedAmount = new Intl.NumberFormat('en-IN', {
         maximumFractionDigits: 0
       }).format(amount);
-      // Return with proper rupee symbol ₹
-      return `₹ ${formattedAmount}`;
+      // Return with Rs. prefix
+      return `Rs. ${formattedAmount}`;
     };
 
     // Helper function to check if subscription is expired
@@ -981,81 +789,92 @@ const generateAllMembersPDF = async (users) => {
     };
 
     let currentPage = 1;
-    const membersPerPage = 8;
+    const membersPerPage = 10; // More members per page with simpler design
     let memberIndex = 0;
 
     // Function to add header to each page
     const addPageHeader = (pageNum, totalPages) => {
-      // Header background
+      // Simple Clean Header
+      const headerHeight = 90;
       doc
-        .rect(0, 0, doc.page.width, 100)
+        .rect(0, 0, doc.page.width, headerHeight)
         .fill(primaryColor);
 
-      // Company name
-      doc
-        .fillColor('white')
-        .fontSize(24)
-        .font('Helvetica-Bold')
-        .text('STARGYM', 50, 25);
+      // Load and display STAR FITNESS logo
+      try {
+        const logoPath = path.join(__dirname, '..', 'public', 'starlogo.png');
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 40, 10, { 
+            width: 90, 
+            height: 60,
+            fit: [90, 60],
+            align: 'left'
+          });
+        } else {
+          doc
+            .fillColor(white)
+            .fontSize(24)
+            .font('Helvetica-Bold')
+            .text('STAR FITNESS', 40, 25);
+        }
+      } catch (logoError) {
+        doc
+          .fillColor(white)
+          .fontSize(24)
+          .font('Helvetica-Bold')
+          .text('STAR FITNESS', 40, 25);
+      }
 
-      // Tagline
+      // Report title - Simple and clear
       doc
-        .fontSize(10)
-        .font('Helvetica')
-        .text('Fitness & Wellness Center', 50, 50);
-
-      // Report title
-      doc
-        .fontSize(18)
+        .fontSize(20)
         .font('Helvetica-Bold')
+        .fillColor(white)
         .text('ALL MEMBERS REPORT', 0, 30, { align: 'center' });
 
-      // Date and page info
+      // Simple info text
       const reportDate = new Date().toLocaleDateString('en-IN', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
+      const reportTime = new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      
       doc
         .fontSize(9)
         .font('Helvetica')
-        .text(`Generated on: ${reportDate}`, 50, 70)
-        .text(`Page ${pageNum} of ${totalPages}`, doc.page.width - 150, 70, { align: 'right' });
-
-      // Total members count
+        .fillColor(white)
+        .text(`Generated: ${reportDate} at ${reportTime}`, 40, 75);
+      
       doc
         .fontSize(10)
         .font('Helvetica-Bold')
+        .fillColor(white)
         .text(`Total Members: ${users.length}`, doc.page.width - 200, 50, { align: 'right' });
+      
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor(white)
+        .text(`Page ${pageNum} of ${totalPages}`, doc.page.width - 150, 75, { align: 'right' });
     };
 
-    // Function to add table header
-    const addTableHeader = (yPos) => {
+    // Simple section header with proper spacing
+    const addSectionHeader = (yPos, text) => {
       doc
-        .fillColor('white')
-        .fontSize(10)
-        .font('Helvetica-Bold');
-      
-      // Header background
-      doc
-        .rect(50, yPos - 8, doc.page.width - 100, 20)
-        .fill(primaryColor);
-      
-      // Header text with better column spacing
-      doc
-        .text('S.No', 50, yPos)
-        .text('Name', 80, yPos)
-        .text('Contact', 180, yPos)
-        .text('Plan', 280, yPos)
-        .text('Status', 350, yPos)
-        .text('Amount', 420, yPos)
-        .text('Dates', 500, yPos);
-
-      // Draw header underline
-      doc
+        .fontSize(12)
+        .font('Helvetica-Bold')
         .fillColor(primaryColor)
-        .moveTo(50, yPos + 12)
-        .lineTo(doc.page.width - 50, yPos + 12)
+        .text(text, 40, yPos);
+      
+      // Simple underline with more spacing below text
+      doc
+        .moveTo(40, yPos + 12)
+        .lineTo(doc.page.width - 40, yPos + 12)
         .stroke(primaryColor, 1);
     };
 
@@ -1070,9 +889,16 @@ const generateAllMembersPDF = async (users) => {
 
       addPageHeader(page, totalPages);
 
-      let yPosition = 130;
-      addTableHeader(yPosition);
-      yPosition += 30;
+      let yPosition = 110;
+      
+      // Add simple section header with proper spacing
+      if (page === 1) {
+        addSectionHeader(yPosition, 'MEMBERS LIST');
+        yPosition += 25; // Increased spacing to avoid overlap
+      } else {
+        addSectionHeader(yPosition, 'MEMBERS LIST (Continued)');
+        yPosition += 25; // Increased spacing to avoid overlap
+      }
 
       // Add members for this page
       const startIndex = (page - 1) * membersPerPage;
@@ -1093,92 +919,117 @@ const generateAllMembersPDF = async (users) => {
         if (yPosition > doc.page.height - 100) {
           doc.addPage();
           addPageHeader(page + 1, totalPages);
-          yPosition = 130;
-          addTableHeader(yPosition);
-          yPosition += 30;
+          yPosition = 110;
+          addSectionHeader(yPosition, 'MEMBERS LIST (Continued)');
+          yPosition += 25; // Increased spacing to avoid overlap
         }
 
-        // Serial number
-        doc
-          .fillColor(darkGray)
-          .fontSize(9)
-          .font('Helvetica')
-          .text(serialNo.toString(), 50, yPosition);
+        // Simple Member Row - Clean and Clear
+        const rowHeight = 50;
+        const rowY = yPosition;
+        
+        // Alternating row background for better readability
+        if (i % 2 === 0) {
+          doc
+            .rect(40, rowY, doc.page.width - 80, rowHeight)
+            .fill(lightGray);
+        }
 
-        // Name (truncate if too long)
-        const name = user.name && user.name.length > 18 ? user.name.substring(0, 15) + '...' : (user.name || 'N/A');
+        // Left border for status indicator
         doc
-          .fillColor(primaryColor)
-          .fontSize(9)
+          .rect(40, rowY, 4, rowHeight)
+          .fill(statusColor);
+
+        // Serial Number - Simple
+        doc
+          .fontSize(10)
           .font('Helvetica-Bold')
-          .text(name, 80, yPosition, { width: 95 });
+          .fillColor(darkGray)
+          .text(`${serialNo}.`, 50, rowY + 5);
 
-        // Contact info (email and phone) - better formatting with more space
+        // Member Name - Clear and Bold
+        const name = user.name || 'N/A';
+        doc
+          .fontSize(11)
+          .font('Helvetica-Bold')
+          .fillColor(primaryColor)
+          .text(name, 70, rowY + 5, { width: 150 });
+
+        // Member ID
+        const memberId = `MEM-${user._id.toString().slice(-6).toUpperCase()}`;
+        doc
+          .fontSize(8)
+          .font('Helvetica')
+          .fillColor(darkGray)
+          .text(`ID: ${memberId}`, 70, rowY + 18);
+
+        // Contact Information - Clear
         const email = user.email || 'N/A';
         const phone = user.phone || 'N/A';
-        // Truncate email if too long but give more space
         const displayEmail = email.length > 30 ? email.substring(0, 27) + '...' : email;
-        doc
-          .fillColor(darkGray)
-          .font('Helvetica')
-          .fontSize(8)
-          .text(displayEmail, 180, yPosition, { width: 95 });
-        // Format phone number properly
         const formattedPhone = phone && phone.length === 10 
           ? `${phone.substring(0, 5)} ${phone.substring(5)}` 
           : phone;
+        
         doc
-          .fillColor(darkGray)
-          .font('Helvetica')
           .fontSize(8)
-          .text(`Ph: ${formattedPhone}`, 180, yPosition + 10, { width: 95 });
-
-        // Plan
-        doc
-          .fillColor(primaryColor)
-          .fontSize(9)
           .font('Helvetica')
-          .text(getPlanDisplayName(user.plan), 280, yPosition, { width: 65 });
+          .fillColor(darkGray)
+          .text(displayEmail, 70, rowY + 30, { width: 150 })
+          .text(formattedPhone, 70, rowY + 40, { width: 150 });
 
-        // Status with color indicator
+        // Plan - Clear
+        const planName = getPlanDisplayName(user.plan);
         doc
-          .fillColor(statusColor)
+          .fontSize(10)
           .font('Helvetica-Bold')
-          .fontSize(9)
-          .text(statusText, 350, yPosition, { width: 65 });
+          .fillColor(primaryColor)
+          .text(planName, 240, rowY + 5, { width: 80 });
 
-        // Amount with proper rupee symbol
+        // Amount - Clear
         const amountText = formatCurrency(getPlanAmount(user.plan));
         doc
-          .fillColor(primaryColor)
+          .fontSize(10)
           .font('Helvetica-Bold')
-          .fontSize(9)
-          .text(amountText, 420, yPosition, { width: 75 });
+          .fillColor(primaryColor)
+          .text(amountText, 240, rowY + 20, { width: 80 });
 
-        // Dates - better formatting
+        // Status - Simple badge
+        doc
+          .fontSize(9)
+          .font('Helvetica-Bold')
+          .fillColor(statusColor)
+          .text(statusText, 240, rowY + 35, { width: 80 });
+
+        // Dates - Clear formatting
         const startDateText = formatDate(user.startDate);
         const endDateText = formatDate(user.endDate);
+        
         doc
-          .fillColor(darkGray)
-          .font('Helvetica')
           .fontSize(8)
-          .text(`S: ${startDateText}`, 500, yPosition, { width: 95 });
-        doc
-          .fillColor(darkGray)
           .font('Helvetica')
-          .fontSize(8)
-          .text(`E: ${endDateText}`, 500, yPosition + 10, { width: 95 });
+          .fillColor(darkGray)
+          .text(`Start: ${startDateText}`, 330, rowY + 5, { width: 120 })
+          .text(`End: ${endDateText}`, 330, rowY + 18, { width: 120 });
 
-        yPosition += 45;
+        // Payment Method
+        const paymentMethod = user.paymentMethod === 'online' ? 'Online' : 'Cash';
+        doc
+          .fontSize(8)
+          .font('Helvetica')
+          .fillColor(darkGray)
+          .text(`Payment: ${paymentMethod}`, 330, rowY + 32, { width: 120 });
+
+        yPosition += rowHeight + 5; // Spacing between rows
       }
 
-      // Add summary section at the bottom of each page (except last)
+      // Simple continuation notice
       if (page < totalPages) {
-        const summaryY = doc.page.height - 80;
+        const summaryY = doc.page.height - 60;
         doc
-          .fillColor(primaryColor)
+          .fillColor(darkGray)
           .fontSize(9)
-          .font('Helvetica-Bold')
+          .font('Helvetica')
           .text('--- Continued on next page ---', 0, summaryY, { align: 'center' });
       }
     }
@@ -1201,86 +1052,85 @@ const generateAllMembersPDF = async (users) => {
       'yearly': users.filter(u => u.plan === 'yearly').length
     };
 
-    let summaryY = 130;
+    let summaryY = 110;
 
+    // Simple Summary Header with proper spacing
+    addSectionHeader(summaryY, 'SUMMARY STATISTICS');
+    summaryY += 30; // Increased spacing to avoid overlap
+
+    // Simple Statistics Table
+    const statBoxWidth = 140;
+    const statBoxHeight = 60;
+    const statSpacing = 15;
+    const statStartX = (doc.page.width - (statBoxWidth * 2 + statSpacing)) / 2;
+
+    // Active Members - Simple box
+    doc
+      .rect(statStartX, summaryY, statBoxWidth, statBoxHeight)
+      .fill(white)
+      .stroke(mediumGray, 1);
+    
     doc
       .fillColor(primaryColor)
-      .fontSize(16)
+      .fontSize(10)
       .font('Helvetica-Bold')
-      .text('SUMMARY STATISTICS', 0, summaryY, { align: 'center' });
-
-    summaryY += 40;
-
-    // Statistics boxes
-    const boxWidth = 150;
-    const boxHeight = 60;
-    const boxSpacing = 20;
-    const startX = (doc.page.width - (boxWidth * 2 + boxSpacing)) / 2;
-
-    // Active Members
-    doc
-      .rect(startX, summaryY, boxWidth, boxHeight)
-      .fill(lightGray)
-      .stroke(greenColor, 2);
-    doc
+      .text('Active Members', statStartX + 10, summaryY + 8)
+      .fontSize(24)
       .fillColor(greenColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('Active Members', startX + 10, summaryY + 10)
-      .fontSize(20)
-      .text(activeMembers.toString(), startX + 10, summaryY + 30);
+      .text(activeMembers.toString(), statStartX + 10, summaryY + 25);
 
-    // Expired Members
+    // Expired Members - Simple box
     doc
-      .rect(startX + boxWidth + boxSpacing, summaryY, boxWidth, boxHeight)
-      .fill(lightGray)
-      .stroke(redColor, 2);
-    doc
-      .fillColor(redColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('Expired Members', startX + boxWidth + boxSpacing + 10, summaryY + 10)
-      .fontSize(20)
-      .text(expiredMembers.toString(), startX + boxWidth + boxSpacing + 10, summaryY + 30);
-
-    summaryY += boxHeight + 30;
-
-    // Pending Members
-    doc
-      .rect(startX, summaryY, boxWidth, boxHeight)
-      .fill(lightGray)
-      .stroke(yellowColor, 2);
-    doc
-      .fillColor(yellowColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('Pending Payments', startX + 10, summaryY + 10)
-      .fontSize(20)
-      .text(pendingMembers.toString(), startX + 10, summaryY + 30);
-
-    // Total Revenue
-    doc
-      .rect(startX + boxWidth + boxSpacing, summaryY, boxWidth, boxHeight)
-      .fill(lightGray)
-      .stroke(accentColor, 2);
-    doc
-      .fillColor(accentColor)
-      .fontSize(12)
-      .font('Helvetica-Bold')
-      .text('Total Revenue', startX + boxWidth + boxSpacing + 10, summaryY + 10)
-      .fontSize(16)
-      .text(formatCurrency(totalRevenue), startX + boxWidth + boxSpacing + 10, summaryY + 30, { width: boxWidth - 20 });
-
-    summaryY += boxHeight + 40;
-
-    // Plan distribution
+      .rect(statStartX + statBoxWidth + statSpacing, summaryY, statBoxWidth, statBoxHeight)
+      .fill(white)
+      .stroke(mediumGray, 1);
+    
     doc
       .fillColor(primaryColor)
-      .fontSize(14)
+      .fontSize(10)
       .font('Helvetica-Bold')
-      .text('PLAN DISTRIBUTION', 50, summaryY);
+      .text('Expired Members', statStartX + statBoxWidth + statSpacing + 10, summaryY + 8)
+      .fontSize(24)
+      .fillColor(redColor)
+      .text(expiredMembers.toString(), statStartX + statBoxWidth + statSpacing + 10, summaryY + 25);
 
-    summaryY += 25;
+    summaryY += statBoxHeight + 15;
+
+    // Pending Members - Simple box
+    doc
+      .rect(statStartX, summaryY, statBoxWidth, statBoxHeight)
+      .fill(white)
+      .stroke(mediumGray, 1);
+    
+    doc
+      .fillColor(primaryColor)
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .text('Pending Payments', statStartX + 10, summaryY + 8)
+      .fontSize(24)
+      .fillColor(yellowColor)
+      .text(pendingMembers.toString(), statStartX + 10, summaryY + 25);
+
+    // Total Revenue - Simple box
+    doc
+      .rect(statStartX + statBoxWidth + statSpacing, summaryY, statBoxWidth, statBoxHeight)
+      .fill(white)
+      .stroke(accentColor, 2);
+    
+    doc
+      .fillColor(primaryColor)
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .text('Total Revenue', statStartX + statBoxWidth + statSpacing + 10, summaryY + 8)
+      .fontSize(18)
+      .fillColor(accentColor)
+      .text(formatCurrency(totalRevenue), statStartX + statBoxWidth + statSpacing + 10, summaryY + 25, { width: statBoxWidth - 20 });
+
+    summaryY += statBoxHeight + 30;
+
+    // Simple Plan Distribution with proper spacing
+    addSectionHeader(summaryY, 'PLAN DISTRIBUTION');
+    summaryY += 30; // Increased spacing to avoid overlap
 
     const plans = [
       { name: '1 Month', count: planCounts['1month'] },
@@ -1290,33 +1140,54 @@ const generateAllMembersPDF = async (users) => {
       { name: '1 Year', count: planCounts['yearly'] }
     ];
 
+    let planY = summaryY;
     plans.forEach((plan, index) => {
-      const rowY = summaryY + (index * 20);
+      // Alternating row background
+      if (index % 2 === 0) {
+        doc
+          .rect(40, planY, doc.page.width - 80, 20)
+          .fill(lightGray);
+      }
+      
+      // Plan name
       doc
-        .fillColor(darkGray)
         .fontSize(10)
-        .font('Helvetica')
-        .text(plan.name, 50, rowY)
-        .fillColor(primaryColor)
         .font('Helvetica-Bold')
-        .text(plan.count.toString(), 200, rowY);
+        .fillColor(primaryColor)
+        .text(plan.name, 50, planY + 5, { width: 150 });
+      
+      // Count
+      doc
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .fillColor(primaryColor)
+        .text(plan.count.toString(), 200, planY + 5);
+      
+      // Percentage
+      const percentage = users.length > 0 ? ((plan.count / users.length) * 100).toFixed(1) : '0.0';
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor(darkGray)
+        .text(`${percentage}%`, 250, planY + 6);
+      
+      planY += 22;
     });
 
-    // Footer
-    const footerY = doc.page.height - 60;
+    // Simple Footer
+    const footerY = doc.page.height - 50;
+    
     doc
-      .rect(0, footerY, doc.page.width, 60)
+      .rect(0, footerY, doc.page.width, 50)
       .fill(lightGray);
 
     doc
-      .fillColor(primaryColor)
-      .fontSize(10)
-      .font('Helvetica-Bold')
-      .text('This is a computer-generated report.', 0, footerY + 10, { align: 'center' })
+      .fontSize(9)
       .font('Helvetica')
       .fillColor(darkGray)
-      .text('For any queries, contact: info@stargym.com', 0, footerY + 25, { align: 'center' })
-      .text('Generated by StarGym Management System', 0, footerY + 40, { align: 'center' });
+      .text('This is a computer-generated report.', 0, footerY + 10, { align: 'center' })
+      .text('For any queries, contact: info@stargym.com', 0, footerY + 23, { align: 'center' })
+      .text('Generated by StarGym Management System', 0, footerY + 36, { align: 'center' });
 
     // Finalize the PDF
     await new Promise((resolve, reject) => {

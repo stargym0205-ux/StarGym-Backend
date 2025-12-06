@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/Admin');
 const { generateReceipt } = require('../services/pdfService');
 const User = require('../models/User');
-const { sendEmail, createPaymentConfirmationEmail, createPasswordResetEmail } = require('../services/emailService');
+const { sendEmail, createPaymentConfirmationEmail, createPasswordResetEmail, createPasswordResetOTPEmail } = require('../services/emailService');
 const { sendWhatsAppText } = require('../services/whatsappService');
 const { getPlanAmount, getPlanDisplayName } = require('../utils/formatters');
 
@@ -134,42 +134,46 @@ exports.forgotPassword = async (req, res) => {
     if (!admin) {
       return res.status(200).json({
         status: 'success',
-        message: 'If an account with that email exists, a password reset link has been sent.'
+        message: 'If an account with that email exists, an OTP has been sent to your email.'
       });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOTP = crypto.createHash('sha256').update(otp).digest('hex');
 
-    // Save hashed token and expiration (10 minutes)
-    admin.passwordResetToken = hashedToken;
-    admin.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    // Save hashed OTP and expiration (10 minutes)
+    admin.passwordResetOTP = hashedOTP;
+    admin.passwordResetOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    // Clear old token fields if they exist
+    admin.passwordResetToken = undefined;
+    admin.passwordResetExpires = undefined;
     await admin.save({ validateBeforeSave: false });
 
-    // Create reset URL
-    const baseUrl = process.env.FRONTEND_URL || process.env.BASE_URL || 'http://localhost:5173';
-    const resetURL = `${baseUrl}/admin/reset-password/${resetToken}`;
-
     try {
-      // Send email with reset link
+      // Send email with OTP
+      console.log(`📧 Sending OTP email to: ${admin.email}`);
+      console.log(`🔐 Generated OTP: ${otp} (for testing - remove in production)`);
+      
       await sendEmail({
         email: admin.email,
-        subject: 'Password Reset Request - Star Gym Admin',
-        html: createPasswordResetEmail(resetURL)
+        subject: 'Password Reset OTP - Star Gym Admin',
+        html: createPasswordResetOTPEmail(otp)
       });
+
+      console.log(`✅ OTP email sent successfully to ${admin.email}`);
 
       res.status(200).json({
         status: 'success',
-        message: 'Password reset link has been sent to your email'
+        message: 'OTP has been sent to your email. Please check your inbox.'
       });
     } catch (error) {
-      // If email fails, clear the reset token
-      admin.passwordResetToken = undefined;
-      admin.passwordResetExpires = undefined;
+      // If email fails, clear the OTP
+      admin.passwordResetOTP = undefined;
+      admin.passwordResetOTPExpires = undefined;
       await admin.save({ validateBeforeSave: false });
 
-      console.error('Error sending password reset email:', error);
+      console.error('Error sending password reset OTP email:', error);
       return res.status(500).json({
         status: 'error',
         message: 'Error sending email. Please try again later.'
@@ -177,6 +181,71 @@ exports.forgotPassword = async (req, res) => {
     }
   } catch (error) {
     console.error('Forgot password error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred. Please try again later.'
+    });
+  }
+};
+
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide email and OTP'
+      });
+    }
+
+    // Find admin by email
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
+
+    if (!admin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid email or OTP'
+      });
+    }
+
+    // Hash the provided OTP to compare with stored OTP
+    const hashedOTP = crypto.createHash('sha256').update(otp).digest('hex');
+
+    // Check if OTP is valid and not expired
+    if (!admin.passwordResetOTP || admin.passwordResetOTP !== hashedOTP) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid OTP'
+      });
+    }
+
+    if (!admin.passwordResetOTPExpires || admin.passwordResetOTPExpires < Date.now()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'OTP has expired. Please request a new one.'
+      });
+    }
+
+    // OTP is valid - generate a temporary token for password reset
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Save token and clear OTP (OTP can only be used once)
+    admin.passwordResetToken = hashedToken;
+    admin.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    admin.passwordResetOTP = undefined;
+    admin.passwordResetOTPExpires = undefined;
+
+    await admin.save({ validateBeforeSave: false });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'OTP verified successfully',
+      resetToken: resetToken // Send token to frontend for password reset
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
     res.status(500).json({
       status: 'error',
       message: 'An error occurred. Please try again later.'
@@ -223,9 +292,11 @@ exports.resetPassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     admin.password = await bcrypt.hash(password, salt);
 
-    // Clear reset token fields
+    // Clear all reset fields
     admin.passwordResetToken = undefined;
     admin.passwordResetExpires = undefined;
+    admin.passwordResetOTP = undefined;
+    admin.passwordResetOTPExpires = undefined;
 
     await admin.save();
 

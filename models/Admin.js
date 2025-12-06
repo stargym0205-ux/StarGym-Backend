@@ -16,7 +16,9 @@ const adminSchema = new mongoose.Schema({
     select: false
   },
   passwordResetToken: String,
-  passwordResetExpires: Date
+  passwordResetExpires: Date,
+  passwordResetOTP: String,
+  passwordResetOTPExpires: Date
 });
 
 adminSchema.methods.correctPassword = async function(candidatePassword, userPassword) {
