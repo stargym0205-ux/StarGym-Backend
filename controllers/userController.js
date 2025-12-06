@@ -201,8 +201,9 @@ exports.approvePayment = async (req, res) => {
     console.log('Generated Receipt URL:', receiptUrl);
     
     // Prepend base URL to create full download URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-kohl.vercel.app';
-    const finalReceiptUrl = `${baseUrl}${receiptUrl}`;
+    // Use Vercel URL for email OTP and receipt links
+    const emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.VERCEL_URL || 'https://gym-backend-ochre-three.vercel.app';
+    const finalReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
     console.log('Final Receipt URL:', finalReceiptUrl);
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
@@ -310,10 +311,11 @@ exports.getAllUsers = async (req, res) => {
     const users = await User.find({ isDeleted: { $ne: true } });
     
     // Process users to ensure photo URLs are correct
+    // Use Render URL for image assets
     const assetBaseUrl =
-      process.env.BASE_URL ||
+      process.env.IMAGE_BASE_URL ||
       process.env.RENDER_EXTERNAL_URL ||
-      'https://gym-backend-mz5w.onrender.com';
+      'https://gym-backend-hz0n.onrender.com';
 
     const processedUsers = users.map(user => {
       const userObj = user.toObject();

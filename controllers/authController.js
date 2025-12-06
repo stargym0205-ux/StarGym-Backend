@@ -259,8 +259,9 @@ exports.approvePayment = async (req, res) => {
     console.log('Generated Receipt URL:', receiptUrl);
     
     // Prepend base URL to create full download URL
-    const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://gym-backend-kohl.vercel.app';
-    const fullReceiptUrl = `${baseUrl}${receiptUrl}`;
+    // Use Vercel URL for email OTP and receipt links
+    const emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.VERCEL_URL || 'https://gym-backend-ochre-three.vercel.app';
+    const fullReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
