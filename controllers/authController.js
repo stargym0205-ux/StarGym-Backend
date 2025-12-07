@@ -329,6 +329,12 @@ exports.approvePayment = async (req, res) => {
     const receiptUrl = await generateReceipt(user);
     console.log('Generated Receipt URL:', receiptUrl);
     
+    // Validate receiptUrl
+    if (!receiptUrl || typeof receiptUrl !== 'string') {
+      console.error('Invalid receiptUrl generated:', receiptUrl);
+      throw new Error('Failed to generate receipt URL');
+    }
+    
     // Prepend base URL to create full download URL
     // Use environment variable for backend URL, with proper fallback
     // Ensure we always use the full backend API URL for email links
@@ -346,14 +352,34 @@ exports.approvePayment = async (req, res) => {
       emailBaseUrl = 'https://star-gym-backend.vercel.app';
     }
     
-    // Ensure the URL doesn't end with a slash and doesn't have double slashes
-    emailBaseUrl = emailBaseUrl.replace(/\/$/, '').replace(/\/+/g, '/');
+    // Clean and validate the base URL
+    emailBaseUrl = emailBaseUrl.trim();
+    
+    // Ensure it starts with http:// or https://
+    if (!emailBaseUrl.startsWith('http://') && !emailBaseUrl.startsWith('https://')) {
+      emailBaseUrl = `https://${emailBaseUrl}`;
+    }
+    
+    // Remove trailing slashes
+    emailBaseUrl = emailBaseUrl.replace(/\/+$/, '');
     
     // Ensure receiptUrl starts with / if it doesn't already
     const normalizedReceiptUrl = receiptUrl.startsWith('/') ? receiptUrl : `/${receiptUrl}`;
     
+    // Construct final URL
     const fullReceiptUrl = `${emailBaseUrl}${normalizedReceiptUrl}`;
-    console.log('Final Receipt URL for email:', fullReceiptUrl);
+    
+    // Validate the final URL
+    try {
+      new URL(fullReceiptUrl); // This will throw if URL is invalid
+      console.log('✅ Valid Final Receipt URL for email:', fullReceiptUrl);
+    } catch (urlError) {
+      console.error('❌ Invalid URL constructed:', fullReceiptUrl);
+      console.error('Base URL:', emailBaseUrl);
+      console.error('Receipt path:', normalizedReceiptUrl);
+      throw new Error(`Invalid receipt URL: ${fullReceiptUrl}`);
+    }
+    
     console.log('Base URL used:', emailBaseUrl);
     console.log('Receipt path:', normalizedReceiptUrl);
 

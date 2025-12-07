@@ -155,11 +155,11 @@ const createPaymentConfirmationEmail = (user, receiptUrl) => {
           </ul>
         </div>
 
-        ${receiptUrl ? `
+        ${receiptUrl && receiptUrl.trim() ? `
         <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
           <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
           <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
-          <a href="${receiptUrl}" 
+          <a href="${receiptUrl.replace(/"/g, '&quot;')}" 
              target="_blank"
              rel="noopener noreferrer"
              style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"

@@ -200,6 +200,12 @@ exports.approvePayment = async (req, res) => {
     const receiptUrl = await generateReceipt(user);
     console.log('Generated Receipt URL:', receiptUrl);
     
+    // Validate receiptUrl
+    if (!receiptUrl || typeof receiptUrl !== 'string') {
+      console.error('Invalid receiptUrl generated:', receiptUrl);
+      throw new Error('Failed to generate receipt URL');
+    }
+    
     // Prepend base URL to create full download URL
     // Use environment variable for backend URL, with proper fallback
     // Ensure we always use the full backend API URL for email links
@@ -217,14 +223,34 @@ exports.approvePayment = async (req, res) => {
       emailBaseUrl = 'https://star-gym-backend.vercel.app';
     }
     
-    // Ensure the URL doesn't end with a slash and doesn't have double slashes
-    emailBaseUrl = emailBaseUrl.replace(/\/$/, '').replace(/\/+/g, '/');
+    // Clean and validate the base URL
+    emailBaseUrl = emailBaseUrl.trim();
+    
+    // Ensure it starts with http:// or https://
+    if (!emailBaseUrl.startsWith('http://') && !emailBaseUrl.startsWith('https://')) {
+      emailBaseUrl = `https://${emailBaseUrl}`;
+    }
+    
+    // Remove trailing slashes
+    emailBaseUrl = emailBaseUrl.replace(/\/+$/, '');
     
     // Ensure receiptUrl starts with / if it doesn't already
     const normalizedReceiptUrl = receiptUrl.startsWith('/') ? receiptUrl : `/${receiptUrl}`;
     
+    // Construct final URL
     const finalReceiptUrl = `${emailBaseUrl}${normalizedReceiptUrl}`;
-    console.log('Final Receipt URL for email:', finalReceiptUrl);
+    
+    // Validate the final URL
+    try {
+      new URL(finalReceiptUrl); // This will throw if URL is invalid
+      console.log('✅ Valid Final Receipt URL for email:', finalReceiptUrl);
+    } catch (urlError) {
+      console.error('❌ Invalid URL constructed:', finalReceiptUrl);
+      console.error('Base URL:', emailBaseUrl);
+      console.error('Receipt path:', normalizedReceiptUrl);
+      throw new Error(`Invalid receipt URL: ${finalReceiptUrl}`);
+    }
+    
     console.log('Base URL used:', emailBaseUrl);
     console.log('Receipt path:', normalizedReceiptUrl);
 
@@ -283,11 +309,11 @@ exports.approvePayment = async (req, res) => {
                 <p style="margin: 8px 0; color: #666;"><strong>Payment Status:</strong> <span style="color: #4caf50; font-weight: bold;">Confirmed</span></p>
               </div>
               
-              ${finalReceiptUrl ? `
+              ${finalReceiptUrl && finalReceiptUrl.trim() ? `
               <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
                 <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
                 <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
-                <a href="${finalReceiptUrl}" 
+                <a href="${finalReceiptUrl.replace(/"/g, '&quot;')}" 
                    target="_blank"
                    rel="noopener noreferrer"
                    style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
