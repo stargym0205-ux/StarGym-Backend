@@ -22,6 +22,7 @@ router.patch('/approve/:userId', userController.approvePayment);
 router.patch('/:id', userController.updateUser);
 router.delete('/:id', userController.deleteUser);
 router.post('/notify-expired/:userId', userController.notifyExpiredMember);
+router.post('/notify-expiring/:userId', userController.notifyExpiringMember);
 router.patch('/reject-renewal/:userId', userController.rejectRenewal);
 
 // Add membership history

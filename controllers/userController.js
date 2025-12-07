@@ -223,6 +223,10 @@ exports.approvePayment = async (req, res) => {
     const finalReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
     console.log('Final Receipt URL:', finalReceiptUrl);
 
+    // Determine if this is a renewal or new membership
+    // Check if user has renewals array with recent entries or if renewalCount > 0
+    const isRenewal = (user.renewals && user.renewals.length > 0) || (user.renewalCount && user.renewalCount > 0);
+
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
       user.membershipHistory = [];
@@ -236,8 +240,10 @@ exports.approvePayment = async (req, res) => {
       'yearly': 12
     };
 
+    const historyType = isRenewal ? 'renewal' : 'join';
+
     user.membershipHistory.push({
-      type: 'join',
+      type: historyType,
       date: new Date(),
       duration: String(planToMonths[user.plan] || 0),
       amount: getPlanAmount(user.plan),
@@ -253,16 +259,16 @@ exports.approvePayment = async (req, res) => {
     // Send confirmation email
     await sendEmail({
       email: user.email,
-      subject: 'Payment Confirmed - StarGym Membership',
+      subject: isRenewal ? 'Renewal Confirmed - StarGym Membership' : 'Payment Confirmed - StarGym Membership',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f8f8; padding: 20px;">
           <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h1 style="color: #333; text-align: center; margin: 0;">Payment Confirmed! 🎉</h1>
+            <h1 style="color: #333; text-align: center; margin: 0;">${isRenewal ? 'Renewal' : 'Payment'} Confirmed! 🎉</h1>
             <p style="color: #666; text-align: center; margin: 10px 0 30px 0;">Your StarGym membership is now active</p>
             
             <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
               <p style="color: #444; font-size: 16px; margin: 0 0 15px 0;">Dear ${user.name},</p>
-              <p style="color: #444; line-height: 1.5; margin: 0 0 20px 0;">Your payment has been confirmed for your ${user.plan} membership plan.</p>
+              <p style="color: #444; line-height: 1.5; margin: 0 0 20px 0;">Your ${isRenewal ? 'renewal' : 'payment'} has been confirmed for your ${user.plan} membership plan.</p>
               
               <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #333; margin: 0 0 15px 0;">Membership Details:</h3>
@@ -637,6 +643,119 @@ exports.notifyExpiredMember = async (req, res) => {
   }
 };
 
+exports.notifyExpiringMember = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email, name } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Calculate days left
+    const today = new Date();
+    const endDate = new Date(user.endDate);
+    const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Only send notification if subscription is expiring (7 days or less) and not expired
+    if (daysLeft > 7 || daysLeft < 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'User subscription is not expiring (must be 7 days or less and not expired)'
+      });
+    }
+
+    // Create renewal token
+    const renewalToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Use environment variable for frontend URL; default to live site in production
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+      ? 'https://stargympetlad.netlify.app'
+      : 'http://localhost:5173');
+    const renewalUrl = `${frontendUrl}/renew-membership/${renewalToken}`;
+
+    // Send notification email
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Your StarGym Membership Expires Soon - Renew Now!',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f8f8; padding: 20px;">
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <h1 style="color: #333; text-align: center; margin: 0;">⚠️ Membership Expiring Soon</h1>
+              
+              <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
+                <p style="color: #444; font-size: 16px; margin: 0 0 15px 0;">Dear ${user.name},</p>
+                <p style="color: #444; line-height: 1.5; margin: 0 0 20px 0;">We wanted to remind you that your StarGym membership will expire in <strong>${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}</strong> on ${new Date(user.endDate).toLocaleDateString()}.</p>
+                
+                <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <h3 style="color: #333; margin-top: 0;">Your Membership Details:</h3>
+                  <p style="margin: 8px 0; color: #666;"><strong>Plan:</strong> ${user.plan}</p>
+                  <p style="margin: 8px 0; color: #666;"><strong>Start Date:</strong> ${new Date(user.startDate).toLocaleDateString()}</p>
+                  <p style="margin: 8px 0; color: #666;"><strong>End Date:</strong> ${new Date(user.endDate).toLocaleDateString()}</p>
+                  <p style="margin: 8px 0; color: #666;"><strong>Days Remaining:</strong> <span style="color: #ff9800; font-weight: bold;">${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}</span></p>
+                </div>
+
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${renewalUrl}" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4); display: inline-block; transition: all 0.3s ease;">
+                    🔄 Renew Membership Now
+                  </a>
+                </div>
+
+                <p style="font-size: 14px; color: #666; margin-top: 20px;">
+                  Don't miss out on your fitness journey! Renew now to continue enjoying all StarGym facilities and services.
+                </p>
+                <p style="font-size: 12px; color: #999; margin-top: 15px;">
+                  This renewal link will expire in 7 days. If you have any questions, please don't hesitate to contact us.
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
+                <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+                <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+              </div>
+            </div>
+          </div>
+        `
+      });
+      try {
+        const text = `Hi ${user.name}, your Star Gym membership expires in ${daysLeft} days on ${new Date(user.endDate).toLocaleDateString()}. Renew here: ${renewalUrl}`;
+        await sendWhatsAppText({ phone: user.phone, message: text });
+      } catch (waError) {
+        console.error('WhatsApp expiring notify error:', waError);
+      }
+      res.status(200).json({
+        status: 'success',
+        message: 'Expiry notification sent successfully',
+        daysLeft: daysLeft
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to send email notification',
+        error: emailError.message
+      });
+    }
+  } catch (error) {
+    console.error('Error in notifyExpiringMember:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 exports.verifyRenewalToken = async (req, res) => {
   try {
     const { token } = req.params;
@@ -679,7 +798,7 @@ exports.verifyRenewalToken = async (req, res) => {
 exports.renewMembership = async (req, res) => {
   try {
     const { token } = req.params;
-    const { plan, startDate, endDate, paymentMethod } = req.body;
+    const { plan, startDate, endDate, paymentMethod, orderId } = req.body;
 
     // Verify the token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -725,6 +844,47 @@ exports.renewMembership = async (req, res) => {
 
     // Increment renewal count
     user.renewalCount = (user.renewalCount || 0) + 1;
+
+    let paymentData = null;
+
+    // If online payment, create payment
+    if (paymentMethod === 'online') {
+      const { createPayment } = require('../services/paymentService');
+      try {
+        const { payment } = await createPayment({
+          userId: user._id,
+          plan: plan,
+          amount: newAmount
+        });
+        
+        // Link payment to renewal
+        payment.meta = { ...payment.meta, plan, isRenewal: true };
+        await payment.save();
+        
+        paymentData = {
+          orderId: payment.orderId,
+          paymentId: payment._id.toString(),
+          upiIntent: payment.upiIntent,
+          qrImage: payment.qrImage,
+          amount: payment.amount,
+          currency: payment.currency,
+          expiresAt: payment.expiresAt,
+          status: payment.status
+        };
+      } catch (paymentError) {
+        console.error('Error creating payment for renewal:', paymentError);
+        // Continue with renewal even if payment creation fails
+      }
+    } else if (orderId) {
+      // If orderId provided (legacy support), link existing payment
+      const Payment = require('../models/Payment');
+      const payment = await Payment.findOne({ orderId });
+      if (payment) {
+        payment.user = user._id;
+        payment.meta = { ...payment.meta, plan, isRenewal: true };
+        await payment.save();
+      }
+    }
 
     await user.save();
 
@@ -825,7 +985,9 @@ exports.renewMembership = async (req, res) => {
 
     res.status(200).json({
       status: 'success',
-      message: 'Renewal request submitted successfully'
+      message: 'Renewal request submitted successfully',
+      paymentData: paymentData,
+      orderId: paymentData?.orderId || null
     });
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
