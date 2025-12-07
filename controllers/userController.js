@@ -217,11 +217,16 @@ exports.approvePayment = async (req, res) => {
       emailBaseUrl = 'https://star-gym-backend.vercel.app';
     }
     
-    // Ensure the URL doesn't end with a slash
-    emailBaseUrl = emailBaseUrl.replace(/\/$/, '');
+    // Ensure the URL doesn't end with a slash and doesn't have double slashes
+    emailBaseUrl = emailBaseUrl.replace(/\/$/, '').replace(/\/+/g, '/');
     
-    const finalReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
-    console.log('Final Receipt URL:', finalReceiptUrl);
+    // Ensure receiptUrl starts with / if it doesn't already
+    const normalizedReceiptUrl = receiptUrl.startsWith('/') ? receiptUrl : `/${receiptUrl}`;
+    
+    const finalReceiptUrl = `${emailBaseUrl}${normalizedReceiptUrl}`;
+    console.log('Final Receipt URL for email:', finalReceiptUrl);
+    console.log('Base URL used:', emailBaseUrl);
+    console.log('Receipt path:', normalizedReceiptUrl);
 
     // Determine if this is a renewal or new membership
     // Check if user has renewals array with recent entries or if renewalCount > 0
@@ -283,12 +288,15 @@ exports.approvePayment = async (req, res) => {
                 <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
                 <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
                 <a href="${finalReceiptUrl}" 
+                   target="_blank"
+                   rel="noopener noreferrer"
                    style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
                   📥 Download Receipt
                 </a>
                 <p style="color: #999; margin: 15px 0 0 0; font-size: 12px;">Keep this receipt safe for your records</p>
+                <p style="color: #999; margin: 10px 0 0 0; font-size: 11px;">If the download doesn't start automatically, right-click the button and select "Save link as..."</p>
               </div>
               ` : ''}
               

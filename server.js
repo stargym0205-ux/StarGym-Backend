@@ -172,6 +172,10 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     console.log('Receipt download requested for user ID:', userId);
     console.log('Request origin:', req.headers.origin || 'Direct access (no origin - likely from email)');
     console.log('Request referer:', req.headers.referer || 'No referer');
+    console.log('User-Agent:', req.headers['user-agent'] || 'Unknown');
+    console.log('Request URL:', req.url);
+    console.log('Request method:', req.method);
+    console.log('Request host:', req.get('host') || req.headers.host);
     
     // Find the user
     const user = await User.findById(userId);
@@ -179,6 +183,9 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     
     if (!user) {
       console.log('User not found in database');
+      // Set CORS headers even for errors
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
       return res.status(404).json({
         status: 'error',
         message: 'User not found',
@@ -214,33 +221,34 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     ];
     const origin = req.headers.origin;
     
-    // For direct access (no origin - from email links), construct origin from request
-    let allowedOrigin = '*'; // Default to allow all for direct downloads
+    // For direct access (no origin - from email links), allow all origins
+    // This is critical for email links to work properly
+    let allowedOrigin = '*'; // Default to allow all for direct downloads from email
     if (origin && allowedOrigins.includes(origin)) {
       allowedOrigin = origin;
     } else if (origin && process.env.NODE_ENV === 'development') {
       // In development, allow any origin
       allowedOrigin = origin;
-    } else if (!origin) {
-      // Direct access from email - construct origin from request
-      const protocol = req.protocol || 'https';
-      const host = req.get('host') || req.headers.host;
-      if (host) {
-        allowedOrigin = `${protocol}://${host}`;
-      }
     }
+    // For email links (no origin), we keep '*' to allow the download
     
-    // Set headers for PDF download
-    // Important: Set Content-Type and Content-Disposition BEFORE CORS headers
+    // Set headers for PDF download - CRITICAL ORDER: Set download headers FIRST
+    // This ensures the browser treats it as a download, not a navigation
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="receipt-${user._id}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="receipt-${user._id}.pdf"; filename*=UTF-8''receipt-${user._id}.pdf`);
     res.setHeader('Content-Length', pdfBuffer.length);
+    
+    // Additional headers to force download behavior and prevent redirects
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Transfer-Encoding', 'binary');
+    res.setHeader('Accept-Ranges', 'bytes');
     
     // Set CORS headers - allow direct access from email links
     // Note: When using '*', we cannot use credentials, but for direct downloads this is fine
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Type');
     // Only set credentials if we have a specific origin (not '*')
     if (allowedOrigin !== '*') {
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -249,9 +257,10 @@ app.get('/api/receipt/download/:userId', async (req, res) => {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     
-    // Send the PDF directly - no redirects
+    // Send the PDF directly - no redirects, no JSON wrapper
+    // Express res.send() handles Buffer correctly for binary data
     res.send(pdfBuffer);
-    console.log('PDF sent successfully. Origin:', origin || 'Direct access', 'Allowed origin:', allowedOrigin);
+    console.log('PDF sent successfully. Origin:', origin || 'Direct access (email)', 'Allowed origin:', allowedOrigin);
   } catch (error) {
     console.error('Error serving receipt:', error);
     console.error('Error stack:', error.stack);

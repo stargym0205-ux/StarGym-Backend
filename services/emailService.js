@@ -160,12 +160,15 @@ const createPaymentConfirmationEmail = (user, receiptUrl) => {
           <h3 style="color: #333; margin: 0 0 15px 0; font-size: 18px;">📄 Your Payment Receipt</h3>
           <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">Download your official payment receipt for your records</p>
           <a href="${receiptUrl}" 
+             target="_blank"
+             rel="noopener noreferrer"
              style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
              onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
             📥 Download Receipt
           </a>
           <p style="color: #999; margin: 15px 0 0 0; font-size: 12px;">Keep this receipt safe for your records</p>
+          <p style="color: #999; margin: 10px 0 0 0; font-size: 11px;">If the download doesn't start automatically, right-click the button and select "Save link as..."</p>
         </div>
         ` : ''}
 

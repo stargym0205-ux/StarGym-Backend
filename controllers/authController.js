@@ -346,11 +346,16 @@ exports.approvePayment = async (req, res) => {
       emailBaseUrl = 'https://star-gym-backend.vercel.app';
     }
     
-    // Ensure the URL doesn't end with a slash
-    emailBaseUrl = emailBaseUrl.replace(/\/$/, '');
+    // Ensure the URL doesn't end with a slash and doesn't have double slashes
+    emailBaseUrl = emailBaseUrl.replace(/\/$/, '').replace(/\/+/g, '/');
     
-    const fullReceiptUrl = `${emailBaseUrl}${receiptUrl}`;
-    console.log('Final Receipt URL:', fullReceiptUrl);
+    // Ensure receiptUrl starts with / if it doesn't already
+    const normalizedReceiptUrl = receiptUrl.startsWith('/') ? receiptUrl : `/${receiptUrl}`;
+    
+    const fullReceiptUrl = `${emailBaseUrl}${normalizedReceiptUrl}`;
+    console.log('Final Receipt URL for email:', fullReceiptUrl);
+    console.log('Base URL used:', emailBaseUrl);
+    console.log('Receipt path:', normalizedReceiptUrl);
 
     // Ensure membershipHistory exists and append confirmed entry for revenue tracking
     if (!user.membershipHistory) {
