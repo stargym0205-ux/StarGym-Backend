@@ -391,7 +391,41 @@ exports.updateUser = async (req, res) => {
       }
     });
 
-    const user = await User.findByIdAndUpdate(
+    // Get the user first to check current values
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Plan to months mapping
+    const planToMonths = {
+      '1month': 1,
+      '2month': 2,
+      '3month': 3,
+      '6month': 6,
+      'yearly': 12
+    };
+
+    // Auto-calculate end date if start date is updated or plan is changed
+    const plan = updates.plan || user.plan;
+    const startDate = updates.startDate ? new Date(updates.startDate) : new Date(user.startDate);
+    
+    // If start date is being updated or plan is being changed, recalculate end date
+    if (updates.startDate || updates.plan) {
+      if (startDate && !isNaN(startDate.getTime())) {
+        const months = planToMonths[plan] || 1;
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + months);
+        updates.endDate = endDate;
+        console.log('Auto-calculated end date:', updates.endDate, 'based on plan:', plan, 'and start date:', startDate);
+      }
+    }
+
+    // Update the user
+    const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       updates,
       {
@@ -400,19 +434,12 @@ exports.updateUser = async (req, res) => {
       }
     );
 
-    if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found'
-      });
-    }
-
-    console.log('User updated successfully:', user); // Debug log
+    console.log('User updated successfully:', updatedUser); // Debug log
 
     res.status(200).json({
       status: 'success',
       data: {
-        user
+        user: updatedUser
       }
     });
   } catch (error) {
