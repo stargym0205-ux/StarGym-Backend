@@ -336,18 +336,12 @@ exports.approvePayment = async (req, res) => {
     }
     
     // Prepend base URL to create full download URL
-    // Use environment variable for backend URL, with proper fallback
-    // Ensure we always use the full backend API URL for email links
+    // IMPORTANT: Never use VERCEL_URL for email links as it's a preview URL that requires authentication
+    // Always use the production domain or explicitly set EMAIL_BASE_URL/BACKEND_URL
     let emailBaseUrl = process.env.EMAIL_BASE_URL || process.env.BACKEND_URL;
     
-    // If VERCEL_URL is set, ensure it has https:// protocol
-    if (!emailBaseUrl && process.env.VERCEL_URL) {
-      emailBaseUrl = process.env.VERCEL_URL.startsWith('http') 
-        ? process.env.VERCEL_URL 
-        : `https://${process.env.VERCEL_URL}`;
-    }
-    
     // Final fallback to production backend URL
+    // DO NOT use VERCEL_URL here - it's a deployment-specific preview URL
     if (!emailBaseUrl) {
       emailBaseUrl = 'https://star-gym-backend.vercel.app';
     }
@@ -362,6 +356,18 @@ exports.approvePayment = async (req, res) => {
     
     // Remove trailing slashes
     emailBaseUrl = emailBaseUrl.replace(/\/+$/, '');
+    
+    // CRITICAL: Reject Vercel preview/deployment URLs that require authentication
+    // Preview URLs have patterns like: project-xxx-username.vercel.app (with hash-like strings)
+    // Production URLs are: project-name.vercel.app (simpler pattern)
+    // Check if URL contains a long hash-like segment (7+ alphanumeric chars) which indicates preview URL
+    const vercelPreviewPattern = /-[a-z0-9]{7,}-[a-z0-9-]+\.vercel\.app/i;
+    if (vercelPreviewPattern.test(emailBaseUrl)) {
+      console.error('❌ BLOCKED: Attempted to use Vercel preview URL for email:', emailBaseUrl);
+      console.error('   Preview URLs require authentication and cannot be used in emails');
+      console.error('   Falling back to production URL');
+      emailBaseUrl = 'https://star-gym-backend.vercel.app';
+    }
     
     // Ensure receiptUrl starts with / if it doesn't already
     const normalizedReceiptUrl = receiptUrl.startsWith('/') ? receiptUrl : `/${receiptUrl}`;
