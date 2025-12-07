@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const QRCode = require('qrcode');
 const { uploadPDFToCloudinary } = require('./cloudinaryService');
+const { getPlanAmount, getPlanDisplayName, formatIndianPrice: formatPrice } = require('../utils/formatters');
 
 // UPI Payment details - can be configured via environment variables
 // Note: Make sure .env file is loaded before this module is imported
@@ -35,31 +36,7 @@ const buildUpiIntent = ({ amount, note }) => {
   return upiIntent;
 };
 
-// Helper function to get plan display name
-const getPlanDisplayName = (plan) => {
-  const planNames = {
-    '1month': '1 Month',
-    '2month': '2 Months',
-    '3month': '3 Months',
-    '6month': '6 Months',
-    'yearly': '1 Year'
-  };
-  return planNames[plan] || plan;
-};
-
-// Helper function to get plan amount
-const getPlanAmount = (plan) => {
-  const planPrices = {
-    '1month': 1500,
-    '2month': 2500,
-    '3month': 3500,
-    '6month': 5000,
-    'yearly': 8000
-  };
-  return planPrices[plan] || 0;
-};
-
-// Helper function to format Indian currency with Rs. prefix
+// Helper function to format Indian currency with Rs. prefix (for PDF formatting)
 const formatIndianPrice = (amount) => {
   // Format number with Indian numbering system (lakhs, crores)
   const formattedAmount = new Intl.NumberFormat('en-IN', {
@@ -749,29 +726,7 @@ const generateAllMembersPDF = async (users) => {
       });
     };
 
-    // Helper function to get plan display name
-    const getPlanDisplayName = (plan) => {
-      const planNames = {
-        '1month': '1 Month',
-        '2month': '2 Months',
-        '3month': '3 Months',
-        '6month': '6 Months',
-        'yearly': '1 Year'
-      };
-      return planNames[plan] || plan;
-    };
-
-    // Helper function to get plan amount
-    const getPlanAmount = (plan) => {
-      const planPrices = {
-        '1month': 1500,
-        '2month': 2500,
-        '3month': 3500,
-        '6month': 5000,
-        'yearly': 8000
-      };
-      return planPrices[plan] || 0;
-    };
+    // Note: getPlanDisplayName and getPlanAmount are imported from utils/formatters
 
     // Helper function to format currency with Rs. prefix
     const formatCurrency = (amount) => {

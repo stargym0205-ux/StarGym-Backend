@@ -299,7 +299,8 @@ exports.approvePayment = async (req, res) => {
             
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
               <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
-              <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+              <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
+              <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
               <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
             </div>
           </div>
@@ -720,7 +721,8 @@ exports.notifyExpiringMember = async (req, res) => {
               
               <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
                 <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
-                <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+                <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
+                <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
                 <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
               </div>
             </div>
@@ -967,7 +969,8 @@ exports.renewMembership = async (req, res) => {
             
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
               <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
-              <p style="color: #666; margin: 0;">📞 Phone: 9662468784</p>
+              <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
+              <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
               <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
             </div>
           </div>

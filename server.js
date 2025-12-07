@@ -15,6 +15,7 @@ const sendEmail = require('./services/emailService');
 const { checkExpiredSubscriptions } = require('./services/subscriptionService');
 const healthRoutes = require('./routes/healthRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 const app = express();
 
@@ -118,6 +119,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Receipt download endpoint
 const { generateReceiptForDownload, generateAllMembersPDF } = require('./services/pdfService');
