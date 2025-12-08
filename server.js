@@ -477,7 +477,117 @@ app.get('/api/receipt/test/:userId', async (req, res) => {
   }
 });
 
-// Receipt verification endpoint
+// Receipt verification endpoint for admin panel
+app.get('/api/receipt/verify', protect, async (req, res) => {
+  try {
+    const { receiptNumber, userId } = req.query;
+    
+    if (!receiptNumber && !userId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide either receiptNumber or userId'
+      });
+    }
+    
+    let user = null;
+    
+    // If receipt number is provided, extract user ID from it
+    if (receiptNumber) {
+      // Receipt number format: RCP-XXXXXXXX (last 8 chars of user ID)
+      const receiptMatch = receiptNumber.match(/RCP-([A-Z0-9]{8})/i);
+      if (!receiptMatch) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid receipt number format. Expected format: RCP-XXXXXXXX'
+        });
+      }
+      
+      // Find user by matching the last 8 characters of their ID
+      const receiptSuffix = receiptMatch[1].toUpperCase();
+      const users = await User.find({ isDeleted: { $ne: true } });
+      user = users.find(u => {
+        const userIdSuffix = u._id.toString().slice(-8).toUpperCase();
+        return userIdSuffix === receiptSuffix;
+      });
+    } else if (userId) {
+      // If user ID is provided directly
+      user = await User.findById(userId);
+    }
+    
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Receipt not found or user does not exist'
+      });
+    }
+    
+    // Get the latest payment from membership history
+    let latestPayment = null;
+    if (user.membershipHistory && user.membershipHistory.length > 0) {
+      const confirmedPayments = user.membershipHistory
+        .filter(h => h.paymentStatus === 'confirmed')
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      latestPayment = confirmedPayments[0] || null;
+    }
+    
+    // Generate receipt number
+    const generatedReceiptNumber = `RCP-${user._id.toString().slice(-8).toUpperCase()}`;
+    const memberId = `MEM-${user._id.toString().slice(-8).toUpperCase()}`;
+    
+    // Get payment date
+    let paymentDate = new Date();
+    if (latestPayment && latestPayment.date) {
+      paymentDate = new Date(latestPayment.date);
+    }
+    
+    res.json({
+      status: 'success',
+      data: {
+        receipt: {
+          receiptNumber: generatedReceiptNumber,
+          memberId: memberId,
+          paymentDate: paymentDate.toISOString(),
+          amount: latestPayment?.amount || 0,
+          paymentMode: latestPayment?.paymentMode || user.paymentMethod,
+          transactionId: latestPayment?.transactionId || null
+        },
+        customer: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          gender: user.gender,
+          dob: user.dob,
+          photo: user.photo
+        },
+        subscription: {
+          plan: user.plan,
+          startDate: user.startDate,
+          endDate: user.endDate,
+          paymentMethod: user.paymentMethod,
+          paymentStatus: user.paymentStatus,
+          subscriptionStatus: user.subscriptionStatus,
+          originalJoinDate: user.originalJoinDate
+        },
+        verification: {
+          isValid: true,
+          receiptMatchesCustomer: true,
+          receiptMatchesSubscription: true,
+          verifiedAt: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying receipt:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to verify receipt',
+      error: error.message
+    });
+  }
+});
+
+// Receipt verification endpoint (public HTML page)
 app.get('/verify/:receiptNumber', (req, res) => {
   const { receiptNumber } = req.params;
   

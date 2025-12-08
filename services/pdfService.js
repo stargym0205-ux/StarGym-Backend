@@ -181,15 +181,31 @@ const generateReceiptForDownload = async (user) => {
     // Receipt Info Box - Professional card design
     const receiptNumber = `RCP-${user._id.toString().slice(-8).toUpperCase()}`;
     const memberId = `MEM-${user._id.toString().slice(-8).toUpperCase()}`;
-    const currentDate = new Date().toLocaleDateString('en-IN', {
+    
+    // Try to get payment date from membership history, otherwise use current date
+    // Use Indian Standard Time (IST) timezone for all date/time formatting
+    let paymentDate = new Date();
+    if (user.membershipHistory && user.membershipHistory.length > 0) {
+      const latestPayment = user.membershipHistory
+        .filter(h => h.paymentStatus === 'confirmed')
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      if (latestPayment && latestPayment.date) {
+        paymentDate = new Date(latestPayment.date);
+      }
+    }
+    
+    // Format date and time in Indian Standard Time (IST)
+    const currentDate = paymentDate.toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'Asia/Kolkata'
     });
-    const currentTime = new Date().toLocaleTimeString('en-IN', {
+    const currentTime = paymentDate.toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
     });
 
     // Info boxes - More spacious and interactive
