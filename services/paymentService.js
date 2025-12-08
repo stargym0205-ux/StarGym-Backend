@@ -4,7 +4,7 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const { getPlanAmount } = require('../utils/formatters');
 
-const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA;
+const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA || '9898881882thanganat-1@okicici';
 const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'Gym';
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'changeme';
 
