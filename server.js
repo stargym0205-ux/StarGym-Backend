@@ -678,7 +678,7 @@ app.get('/verify/:receiptNumber', (req, res) => {
         
         <div class="footer">
           <p>Thank you for choosing StarGym!</p>
-          <p>For any queries, contact us at stargym0205@gmail.com</p>
+          <p>For any queries, contact us at stargympetlad0205@gmail.com</p>
         </div>
       </div>
     </body>

@@ -12,7 +12,7 @@ async function createAdminUser() {
 
         // Admin credentials
         const adminData = {
-            email: 'stargym0205@gmail.com',
+            email: 'stargympetlad0205@gmail.com',
             password: 'star@0205'  // This will be hashed
         };
 

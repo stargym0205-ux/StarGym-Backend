@@ -341,7 +341,7 @@ exports.approvePayment = async (req, res) => {
               <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
               <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
               <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
-              <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+              <p style="color: #666; margin: 5px 0;">📧 Email: stargympetlad0205@gmail.com</p>
             </div>
           </div>
         </div>
@@ -790,7 +790,7 @@ exports.notifyExpiringMember = async (req, res) => {
                 <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
                 <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
                 <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
-                <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+                <p style="color: #666; margin: 5px 0;">📧 Email: stargympetlad0205@gmail.com</p>
               </div>
             </div>
           </div>
@@ -1038,7 +1038,7 @@ exports.renewMembership = async (req, res) => {
               <p style="color: #666; margin-bottom: 5px;">Need help? Contact us:</p>
               <p style="color: #666; margin: 0;">📍 Address: 2nd floor, Krishiv complex, Swaminarayan mandir Rd, Petlad, 388450</p>
               <p style="color: #666; margin: 5px 0;">📞 Phone: 9313720714</p>
-              <p style="color: #666; margin: 5px 0;">📧 Email: stargym0205@gmail.com</p>
+              <p style="color: #666; margin: 5px 0;">📧 Email: stargympetlad0205@gmail.com</p>
             </div>
           </div>
         </body>
