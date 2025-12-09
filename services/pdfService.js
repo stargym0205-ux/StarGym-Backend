@@ -8,8 +8,10 @@ const { getPlanAmount, getPlanDisplayName, formatIndianPrice: formatPrice } = re
 // UPI Payment details
 // PRIMARY UPI ID: 9898881882thanganat-1@okicici
 // This UPI ID is used in receipts, QR codes, and when opening GPay/PhonePe/Paytm apps
-// Can be overridden via environment variable UPI_VPA or GPAY_VPA if needed
-const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA || '9898881882thanganat-1@okicici';
+// IMPORTANT: Always use the correct UPI ID for receipts to ensure consistency
+// Environment variables are checked but the correct UPI is always used for receipts
+const CORRECT_UPI_VPA = '9898881882thanganat-1@okicici';
+const PAYEE_VPA = CORRECT_UPI_VPA; // Always use correct UPI for receipts
 const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'StarGym';
 
 // Log UPI configuration on module load (for debugging)

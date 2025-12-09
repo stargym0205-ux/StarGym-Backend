@@ -7,8 +7,10 @@ const { getPlanAmount } = require('../utils/formatters');
 // UPI Payment Configuration
 // PRIMARY UPI ID: 9898881882thanganat-1@okicici
 // This UPI ID is used in payment QR codes, UPI intents, and when opening GPay/PhonePe/Paytm apps
-// Can be overridden via environment variable UPI_VPA or GPAY_VPA if needed
-const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA || '9898881882thanganat-1@okicici';
+// IMPORTANT: Always use the correct UPI ID for payments to ensure consistency
+// Environment variables are checked but the correct UPI is always used for payments
+const CORRECT_UPI_VPA = '9898881882thanganat-1@okicici';
+const PAYEE_VPA = CORRECT_UPI_VPA; // Always use correct UPI for payments
 const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'StarGym';
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'changeme';
 
