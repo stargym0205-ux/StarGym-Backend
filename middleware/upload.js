@@ -35,7 +35,7 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB limit
+    fileSize: 100 * 1024 * 1024 * 1024, // 100GB (effectively no limit for photos)
     files: 1
   },
   fileFilter: function (req, file, cb) {
@@ -44,12 +44,6 @@ const upload = multer({
       mimetype: file.mimetype,
       size: file.size
     });
-
-    // Check file size before processing
-    if (file.size > 2 * 1024 * 1024) {
-      console.log('File size exceeds limit:', file.size);
-      return cb(new Error(`File size exceeds 2MB limit. Please upload a smaller file.`));
-    }
 
     const filetypes = /jpeg|jpg|png/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
@@ -70,12 +64,6 @@ const handleUploadError = (err, req, res, next) => {
   console.error('Upload error:', err);
   
   if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'File size too large. Maximum size is 2MB. Please upload a smaller file.'
-      });
-    }
     return res.status(400).json({
       status: 'error',
       message: err.message || 'Error uploading file'
