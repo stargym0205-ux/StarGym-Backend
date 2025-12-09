@@ -22,6 +22,11 @@ const UserSchema = new mongoose.Schema({
     enum: ['Male', 'Female', 'Other'],
     required: [true, 'Please provide a gender']
   },
+  address: {
+    type: String,
+    required: [true, 'Please provide an address'],
+    trim: true
+  },
   photo: {
     type: String,
     default: 'https://res.cloudinary.com/dovjfipbt/image/upload/v1/default-avatar'

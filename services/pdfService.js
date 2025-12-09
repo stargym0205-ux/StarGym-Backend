@@ -5,8 +5,10 @@ const QRCode = require('qrcode');
 const { uploadPDFToCloudinary } = require('./cloudinaryService');
 const { getPlanAmount, getPlanDisplayName, formatIndianPrice: formatPrice } = require('../utils/formatters');
 
-// UPI Payment details - can be configured via environment variables
-// Note: Make sure .env file is loaded before this module is imported
+// UPI Payment details
+// PRIMARY UPI ID: 9898881882thanganat-1@okicici
+// This UPI ID is used in receipts, QR codes, and when opening GPay/PhonePe/Paytm apps
+// Can be overridden via environment variable UPI_VPA or GPAY_VPA if needed
 const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA || '9898881882thanganat-1@okicici';
 const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'StarGym';
 
@@ -15,7 +17,11 @@ if (!PAYEE_VPA || PAYEE_VPA === '') {
   console.warn('⚠️  UPI_VPA not found in environment variables. Payment QR codes will not work.');
   console.warn('   Please set UPI_VPA in your .env file (e.g., UPI_VPA=yourname@paytm)');
 } else {
-  console.log('✅ UPI_VPA configured:', PAYEE_VPA);
+  console.log('✅ PDF Service - UPI_VPA configured:', PAYEE_VPA);
+  // Confirm correct UPI ID
+  if (PAYEE_VPA === '9898881882thanganat-1@okicici') {
+    console.log('✅ PDF Service - Correct UPI ID is being used: 9898881882thanganat-1@okicici');
+  }
 }
 
 // Helper function to build UPI payment intent

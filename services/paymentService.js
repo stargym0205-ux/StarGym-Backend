@@ -4,9 +4,19 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const { getPlanAmount } = require('../utils/formatters');
 
+// UPI Payment Configuration
+// PRIMARY UPI ID: 9898881882thanganat-1@okicici
+// This UPI ID is used in payment QR codes, UPI intents, and when opening GPay/PhonePe/Paytm apps
+// Can be overridden via environment variable UPI_VPA or GPAY_VPA if needed
 const PAYEE_VPA = process.env.UPI_VPA || process.env.GPAY_VPA || '9898881882thanganat-1@okicici';
-const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'Gym';
+const PAYEE_NAME = process.env.UPI_PAYEE_NAME || 'StarGym';
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'changeme';
+
+// Log UPI configuration on module load
+console.log('✅ Payment Service - UPI_VPA configured:', PAYEE_VPA);
+if (PAYEE_VPA === '9898881882thanganat-1@okicici') {
+  console.log('✅ Payment Service - Correct UPI ID is being used: 9898881882thanganat-1@okicici');
+}
 
 const planToMonths = {
   '1month': 1,

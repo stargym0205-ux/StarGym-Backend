@@ -16,7 +16,7 @@ exports.register = async (req, res) => {
     console.log('Uploaded file:', req.file);
 
     // Validate required fields
-    const requiredFields = ['name', 'email', 'phone', 'gender', 'plan', 'startDate', 'endDate', 'paymentMethod'];
+    const requiredFields = ['name', 'email', 'phone', 'gender', 'address', 'plan', 'startDate', 'endDate', 'paymentMethod'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
     if (missingFields.length > 0) {
@@ -118,6 +118,7 @@ exports.register = async (req, res) => {
       email: req.body.email.toLowerCase(),
       phone: req.body.phone,
       gender: req.body.gender,
+      address: req.body.address,
       plan: req.body.plan,
       originalJoinDate: startDate,
       startDate: startDate,
@@ -421,7 +422,7 @@ exports.updateUser = async (req, res) => {
   try {
     console.log('Update request received:', req.params.id, req.body); // Debug log
 
-    const allowedUpdates = ['name', 'email', 'phone', 'gender', 'plan', 'startDate', 'endDate'];
+    const allowedUpdates = ['name', 'email', 'phone', 'gender', 'address', 'plan', 'startDate', 'endDate'];
     const updates = {};
     
     // Only include allowed fields that are present in the request
